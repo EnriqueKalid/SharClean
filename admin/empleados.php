@@ -344,7 +344,8 @@ textarea.vf-inp{resize:vertical;}
 <header class="admin-header">
   <h1>👥 Empleados</h1>
   <div class="nav-links">
-    <a href="index.php">← Volver al panel</a>
+    <a href="index.php">Panel</a>
+    <a href="asistencia.php">📅 Asistencia</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>

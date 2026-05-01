@@ -251,6 +251,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
   <h1>Sharclean Admin</h1>
   <div style="display:flex;gap:8px;align-items:center;">
     <a href="empleados.php">👥 Empleados</a>
+    <a href="asistencia.php">📅 Asistencia</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>
