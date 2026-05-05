@@ -391,6 +391,181 @@ function initChatbot() {
     });
   }
 
+  /* ── Recruitment flow ─────────────────────────────────────── */
+  let recruitMode = false;
+  let recruitStep = 0;
+  const recruitData = {};
+
+  const RECRUIT_STEPS = [
+    { key: 'nombre',        type: 'text',
+      prompt: 'Para empezar, escribe tu nombre completo:' },
+    { key: 'estado',        type: 'choices',
+      prompt: '¿En qué estado vives actualmente?',
+      choices: ['Ciudad de México (CDMX)', 'Estado de México', 'Veracruz', 'Querétaro', 'San Luis Potosí', 'Otro'] },
+    { key: 'edad',          type: 'text',
+      prompt: '¿Qué edad tienes? (Escribe solo el número):' },
+    { key: 'experiencia',   type: 'choices',
+      prompt: '¿Tienes experiencia previa en limpieza?',
+      choices: ['Sí, más de 6 meses', 'Sí, menos de 6 meses', 'Sin experiencia, con ganas de aprender'] },
+    { key: 'traslado',      type: 'choices',
+      prompt: '¿Cuánto tiempo haces de tu casa a la zona donde buscas empleo?',
+      choices: ['Menos de 45 minutos', 'Entre 45 min y 1 hora y media', 'Más de 1 hora y media'] },
+    { key: 'salud',         type: 'choices',
+      prompt: 'En Sharclean nos preocupamos por tu seguridad, ya que el trabajo requiere esfuerzo físico. ¿Padeces alguna enfermedad crónica o lesión que debamos conocer para asignarte actividades adecuadas?',
+      choices: ['Sí', 'No'] },
+    { key: 'dependientes',  type: 'choices',
+      prompt: '¿Tienes personas que dependan económicamente de ti? (Hijos, padres o familiares).',
+      choices: ['Sí', 'No'] },
+    { key: 'disponibilidad', type: 'choices',
+      prompt: '¿Cuentas con disponibilidad para empezar a trabajar de inmediato?',
+      choices: ['Sí, puedo empezar mañana mismo', 'Necesito unos días', 'No por el momento'] },
+    { key: 'telefono',      type: 'text',
+      prompt: '¡Ya casi terminamos! ¿Cuál es tu número de teléfono? Un reclutador te contactará en las próximas 24-48 horas.' },
+  ];
+
+  function startRecruitment() {
+    recruitMode = true;
+    recruitStep = 0;
+    for (const k in recruitData) delete recruitData[k];
+    suggestionsEl.innerHTML = '';
+    showTyping();
+    setTimeout(() => {
+      hideTyping();
+      appendMsg(
+        '¡Hola! Gracias por tu interés en unirte al equipo de Sharclean. ' +
+        'Soy tu asistente virtual y te ayudaré a postularte. Esta charla durará menos de 5 minutos. 😊',
+        'bot'
+      );
+      advanceRecruitStep();
+    }, 700);
+  }
+
+  function advanceRecruitStep() {
+    if (recruitStep >= RECRUIT_STEPS.length) { submitRecruitment(); return; }
+    const step = RECRUIT_STEPS[recruitStep];
+    showTyping();
+    setTimeout(() => {
+      hideTyping();
+      appendMsg(step.prompt, 'bot');
+      if (step.type === 'choices') {
+        setRecruitInput(false);
+        renderRecruitChoices(step.choices);
+      } else {
+        setRecruitInput(true);
+        input.placeholder =
+          step.key === 'edad'     ? 'Tu edad (ej: 28)...' :
+          step.key === 'telefono' ? 'Tu número de teléfono...' :
+                                    'Escribe tu respuesta...';
+        input.focus();
+      }
+    }, 750);
+  }
+
+  function setRecruitInput(visible) {
+    const row = input.closest('.chatbot__input-row');
+    if (row) row.style.display = visible ? '' : 'none';
+  }
+
+  function renderRecruitChoices(choices) {
+    suggestionsEl.innerHTML = '';
+    choices.forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'chatbot__suggestion';
+      btn.type = 'button';
+      btn.textContent = c;
+      on(btn, 'click', () => handleRecruitChoice(c));
+      suggestionsEl.appendChild(btn);
+    });
+  }
+
+  function handleRecruitChoice(choice) {
+    const step = RECRUIT_STEPS[recruitStep];
+    appendMsg(choice, 'user');
+    suggestionsEl.innerHTML = '';
+
+    if (step.key === 'estado' && choice === 'Otro') {
+      endRecruitment('Por el momento no tenemos vacantes en tu zona, pero guardaremos tu contacto. ¡Muchas gracias por tu interés! 😊');
+      return;
+    }
+
+    recruitData[step.key] = choice;
+    recruitStep++;
+    advanceRecruitStep();
+  }
+
+  function handleRecruitTextInput(msg) {
+    const step = RECRUIT_STEPS[recruitStep];
+    const val  = msg.trim();
+
+    if (step.key === 'edad') {
+      const age = parseInt(val, 10);
+      if (isNaN(age) || !/^\d{1,3}$/.test(val)) {
+        appendMsg(val, 'user');
+        showTyping();
+        setTimeout(() => { hideTyping(); appendMsg('Por favor escribe solo tu edad en números (ej: 28).', 'bot'); input.focus(); }, 500);
+        return;
+      }
+      if (age < 20 || age > 55) {
+        appendMsg(val, 'user');
+        endRecruitment('Agradecemos tu interés. Por ahora, el perfil solicitado para estas vacantes es de 20 a 55 años. ¡Te deseamos mucho éxito! 🙌');
+        return;
+      }
+    }
+
+    if (step.key === 'telefono' && !/^\+?[\d\s\-().]{8,}$/.test(val)) {
+      appendMsg(val, 'user');
+      showTyping();
+      setTimeout(() => { hideTyping(); appendMsg('Por favor ingresa un número de teléfono válido (mínimo 8 dígitos).', 'bot'); input.focus(); }, 500);
+      return;
+    }
+
+    appendMsg(val, 'user');
+    recruitData[step.key] = val;
+    recruitStep++;
+    advanceRecruitStep();
+  }
+
+  function endRecruitment(msg) {
+    recruitMode = false;
+    setRecruitInput(true);
+    input.placeholder = 'Escribe tu pregunta...';
+    showTyping();
+    setTimeout(() => {
+      hideTyping();
+      appendMsg(msg, 'bot');
+      renderSuggestions(['¿Qué servicios ofrecen?', '¿Cómo cotizo?', '¿Zona de cobertura?']);
+    }, 700);
+  }
+
+  async function submitRecruitment() {
+    setRecruitInput(true);
+    input.placeholder = 'Escribe tu pregunta...';
+    showTyping();
+    try {
+      const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+      const payload  = new FormData();
+      for (const [k, v] of Object.entries(recruitData)) payload.append(k, v);
+      if (csrfMeta) payload.append('csrf_token', csrfMeta.content);
+      const res  = await fetch('chatbot_apply.php', { method: 'POST', body: payload });
+      const data = await res.json();
+      hideTyping();
+      if (data.type === 'success') {
+        appendMsg(
+          `¡Excelente, ${recruitData.nombre}! Has completado el primer filtro con éxito. ` +
+          'Un reclutador de Sharclean se pondrá en contacto contigo en las próximas 24 a 48 horas. ¡Ten un excelente día! 🎉',
+          'bot'
+        );
+      } else {
+        appendMsg('Hubo un problema al enviar tus datos. Por favor escríbenos a: informacion@sharclean.com.mx', 'bot');
+      }
+    } catch {
+      hideTyping();
+      appendMsg('Error de conexión. Por favor escríbenos a: informacion@sharclean.com.mx', 'bot');
+    }
+    recruitMode = false;
+    renderSuggestions(['¿Qué servicios ofrecen?', '¿Zona de cobertura?', 'Contactar asesor']);
+  }
+
   /* ── FAQ data ── */
   const faqs = [
     {
@@ -460,8 +635,8 @@ function initChatbot() {
     },
     {
       keywords: ['trabajo','empleo','vacante','postular','sueldo','salario','prestaciones'],
-      response: '¡Nos alegra tu interés! En Sharclean ofrecemos:\n\n• Salario competitivo\n• Prestaciones de ley completas\n• Capacitación constante\n• Buen ambiente laboral\n\nPuedes ver nuestras vacantes en la sección "Vacantes" de esta página.',
-      suggestions: ['Ver vacantes'],
+      response: '¡Nos alegra tu interés! En Sharclean ofrecemos:\n\n• Salario competitivo\n• Prestaciones de ley completas\n• Capacitación constante\n• Buen ambiente laboral\n\n¿Te gustaría postularte directamente aquí o prefieres ver las vacantes disponibles?',
+      suggestions: ['Postularme ahora', 'Ver vacantes'],
     },
     {
       keywords: ['garantía','garantia','seguro','asegurado','certificación','calidad'],
@@ -514,6 +689,16 @@ function initChatbot() {
     if (!msg) return;
 
     input.value = '';
+
+    if (recruitMode) { handleRecruitTextInput(msg); return; }
+
+    if (msg === 'Postularme ahora') {
+      appendMsg(msg, 'user');
+      suggestionsEl.innerHTML = '';
+      startRecruitment();
+      return;
+    }
+
     appendMsg(msg, 'user');
     suggestionsEl.innerHTML = '';
     showTyping();

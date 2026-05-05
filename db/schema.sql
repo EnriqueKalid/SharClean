@@ -220,3 +220,18 @@ INSERT INTO `chatbot_faqs` (`palabras_clave`, `respuesta`, `sugerencias`, `activ
   1,
   60
 );
+
+CREATE TABLE chatbot_candidatos (
+  id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  nombre           VARCHAR(150) NOT NULL,
+  telefono         VARCHAR(30)  NOT NULL,
+  estado           VARCHAR(60),
+  edad             TINYINT UNSIGNED,
+  experiencia      VARCHAR(80),
+  traslado         VARCHAR(60),
+  condicion_salud  TINYINT(1)   DEFAULT 0,
+  dependientes     TINYINT(1)   DEFAULT 0,
+  disponibilidad   VARCHAR(60),
+  ip_address       VARCHAR(45),
+  created_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
