@@ -3,7 +3,7 @@
 -- Ejecutar UNA sola vez contra sharclean_db
 -- ============================================================
 
-USE `sharclean_db`;
+USE `sharclea_dbapp`;
 
 -- ── Nuevos campos en empleados (jornada laboral) ─────────────
 ALTER TABLE `empleados`

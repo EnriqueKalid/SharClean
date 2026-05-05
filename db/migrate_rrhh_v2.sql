@@ -4,7 +4,7 @@
 -- Compatible: MySQL 5.7+ / MariaDB 10.3+
 -- ============================================================
 
-USE `sharclean_db`;
+USE `sharclea_dbapp`;
 
 -- ── aplicaciones_empleo: nuevas columnas ─────────────────────
 -- (omitir si ya existen)

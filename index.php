@@ -796,6 +796,8 @@ $csrfToken = generateCsrfToken();
 </footer>
 
 
+<?php include __DIR__ . '/partials/legal-modals.php'; ?>
+
 <!-- ══════════════════════════════════════════════════════════
      WHATSAPP FLOATING BUTTON
 ══════════════════════════════════════════════════════════ -->
