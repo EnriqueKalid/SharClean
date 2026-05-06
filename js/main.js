@@ -759,13 +759,37 @@ function initApplyForm() {
   });
 }
 
-/* ── Hero parallax background ─────────────────────────────── */
-function initHeroBg() {
+/* ── Hero Carousel ─────────────────────────────────────────── */
+function initHeroCarousel() {
   const bg = $('.hero__bg');
-  if (bg) {
-    // Trigger the loaded class for zoom-out effect
-    setTimeout(() => bg.classList.add('loaded'), 100);
-  }
+  if (!bg) return;
+  const slides = $$('.hero__slide', bg);
+  if (!slides.length) return;
+
+  let current = 0;
+  slides[0].classList.add('active');
+  setTimeout(() => bg.classList.add('loaded'), 100);
+
+  setInterval(() => {
+    slides[current].classList.remove('active');
+    current = (current + 1) % slides.length;
+    slides[current].classList.add('active');
+  }, 5000);
+}
+
+/* ── About Carousel ────────────────────────────────────────── */
+function initAboutCarousel() {
+  const imgs = $$('.about__carousel-img');
+  if (!imgs.length) return;
+
+  let current = 0;
+  imgs[0].classList.add('active');
+
+  setInterval(() => {
+    imgs[current].classList.remove('active');
+    current = (current + 1) % imgs.length;
+    imgs[current].classList.add('active');
+  }, 4000);
 }
 
 /* ── File input label update ──────────────────────────────── */
@@ -800,6 +824,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initFieldValidation();
   initChatbot();
   initApplyForm();
-  initHeroBg();
+  initHeroCarousel();
+  initAboutCarousel();
   initFileInputs();
 });

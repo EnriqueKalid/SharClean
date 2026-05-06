@@ -76,7 +76,14 @@ $csrfToken = generateCsrfToken();
      HERO
 ══════════════════════════════════════════════════════════ -->
 <section id="inicio" class="hero">
-  <div class="hero__bg" role="img" aria-label="Equipo de limpieza profesional Sharclean"></div>
+  <div class="hero__bg" role="img" aria-label="Equipo de limpieza profesional Sharclean">
+    <div class="hero__slide" style="background-image:url('images/servicio1_limpieza.jpg')"></div>
+    <div class="hero__slide" style="background-image:url('images/servicio2_pulido.jpg')"></div>
+    <div class="hero__slide" style="background-image:url('images/servicio3_ventana.jpg')"></div>
+    <div class="hero__slide" style="background-image:url('images/servicio4_alfombra.jpg')"></div>
+    <div class="hero__slide" style="background-image:url('images/servicio5_superficies.jpg')"></div>
+    <div class="hero__slide" style="background-image:url('images/servicios7-jardineria.jpg')"></div>
+  </div>
   <div class="hero__overlay" aria-hidden="true"></div>
 
   <div class="container">
@@ -326,7 +333,15 @@ $csrfToken = generateCsrfToken();
     <div class="about__grid">
 
       <div class="about__image-wrap reveal-left">
-        <img src="images/quienes.webp" alt="Equipo profesional de Sharclean" class="about__image" loading="lazy">
+        <div class="about__carousel">
+          <img src="images/Elevador.jpeg"  alt="Elevador Sharclean"       class="about__carousel-img" loading="lazy">
+          <img src="images/Equipo.jpeg"    alt="Equipo Sharclean"         class="about__carousel-img" loading="lazy">
+          <img src="images/nosotros.jpeg"  alt="Nosotros Sharclean"       class="about__carousel-img" loading="lazy">
+          <img src="images/personal.png"   alt="Personal Sharclean"       class="about__carousel-img" loading="lazy">
+          <img src="images/Pulidora.jpeg"  alt="Pulidora Sharclean"       class="about__carousel-img" loading="lazy">
+          <img src="images/quienes.webp"   alt="Quiénes somos Sharclean"  class="about__carousel-img" loading="lazy">
+          <img src="images/Seguridad.jpeg" alt="Seguridad Sharclean"      class="about__carousel-img" loading="lazy">
+        </div>
         <div class="about__image-badge">
           <div class="about__image-badge-value">10+</div>
           <div class="about__image-badge-label">Años de confianza</div>
