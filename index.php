@@ -124,6 +124,7 @@ $csrfToken = generateCsrfToken();
         </div>
       </div>
     </div>
+    <img src="images/Repse.png" alt="Certificación REPSE – Sharclean" class="hero__repse-img">
   </div>
 
   <a href="#servicios" class="hero__scroll" aria-label="Ver servicios">
@@ -786,10 +787,10 @@ $csrfToken = generateCsrfToken();
     </div>
 
     <div class="footer__bottom">
-      <p class="footer__copy">&copy; <?php echo date('Y'); ?> Sharclean. Todos los derechos reservados.</p>
+      <p class="footer__copy">&copy; <?php echo date('Y'); ?> Sharclean. Todos los derechos reservados.</p><a href="http://www.sisia.com.mx" target="_blank">SISIA</a></p>
       <div class="footer__bottom-links">
-        <a href="#" class="footer__bottom-link">Aviso de privacidad</a>
-        <!-- <a href="#" class="footer__bottom-link">Términos de servicio</a> -->
+        <a href="#" class="footer__bottom-link" id="open-privacy">Aviso de privacidad</a>
+        <a href="#" class="footer__bottom-link" id="open-terms">Términos de servicio</a>
       </div>
     </div>
   </div>
