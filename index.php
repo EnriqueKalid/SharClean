@@ -336,11 +336,12 @@ $csrfToken = generateCsrfToken();
         <div class="about__carousel">
           <img src="images/Elevador.jpeg"  alt="Elevador Sharclean"       class="about__carousel-img" loading="lazy">
           <img src="images/Equipo.jpeg"    alt="Equipo Sharclean"         class="about__carousel-img" loading="lazy">
-          <img src="images/nosotros.jpeg"  alt="Nosotros Sharclean"       class="about__carousel-img" loading="lazy">
-          <img src="images/personal.png"   alt="Personal Sharclean"       class="about__carousel-img" loading="lazy">
+          <img src="images/Nosotros.jpeg"  alt="Nosotros Sharclean"       class="about__carousel-img" loading="lazy">
+          <img src="images/Personal.jpeg"   alt="Personal Sharclean"       class="about__carousel-img" loading="lazy">
           <img src="images/Pulidora.jpeg"  alt="Pulidora Sharclean"       class="about__carousel-img" loading="lazy">
-          <img src="images/quienes.webp"   alt="Quiénes somos Sharclean"  class="about__carousel-img" loading="lazy">
           <img src="images/Seguridad.jpeg" alt="Seguridad Sharclean"      class="about__carousel-img" loading="lazy">
+          <img src="images/Supervisor.jpeg" alt="Supervisor Sharclean"      class="about__carousel-img" loading="lazy">
+
         </div>
         <div class="about__image-badge">
           <div class="about__image-badge-value">10+</div>
