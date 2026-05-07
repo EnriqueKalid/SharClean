@@ -48,6 +48,11 @@ function ibadge(string $estado): string {
     [$bg,$c,$l] = $m[$estado] ?? ['#f1f5f9','#64748b',$estado];
     return "<span style='display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;background:$bg;color:$c;'>$l</span>";
 }
+function fetchAll($result): array {
+    $rows = [];
+    if ($result) while ($row = $result->fetch_assoc()) $rows[] = $row;
+    return $rows;
+}
 
 $TIPOS_ASIST = ['normal'=>'Normal','falta_justificada'=>'Falta justificada','falta_injustificada'=>'Falta injustificada',
                 'vacaciones'=>'Vacaciones','incapacidad'=>'Incapacidad','permiso_goce'=>'Permiso c/goce',
@@ -101,11 +106,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($act === 'bulk_present') {
         $fecha = trim($_POST['fecha'] ?? date('Y-m-d'));
-        $emps  = $db->query(
+        $emps  = fetchAll($db->query(
             "SELECT e.id, e.hora_entrada_esperada FROM empleados e
              LEFT JOIN asistencia a ON a.empleado_id = e.id AND a.fecha = '$fecha'
              WHERE e.estatus = 'activo' AND a.id IS NULL"
-        )->fetch_all(MYSQLI_ASSOC);
+        ));
         $s = $db->prepare("INSERT IGNORE INTO asistencia (empleado_id,fecha,tipo,hora_entrada,capturado_por) VALUES (?,'$fecha','normal',?,'Bulk-Admin')");
         foreach ($emps as $emp) {
             $hora = $emp['hora_entrada_esperada'] ?? '08:00:00';
@@ -169,14 +174,14 @@ $mes_fin       = date('Y-m-t', strtotime($mes_ini));
 $horasExtraMes = (float)($db->query("SELECT COALESCE(SUM(horas_extra),0) FROM asistencia WHERE fecha BETWEEN '$mes_ini' AND '$mes_fin'")->fetch_row()[0] ?? 0);
 
 /* Catálogos */
-$departamentos = $db->query('SELECT id,nombre FROM departamentos WHERE activo=1 ORDER BY nombre')->fetch_all(MYSQLI_ASSOC);
-$empleadosAll  = $db->query("SELECT id, CONCAT(nombre,' ',apellido_paterno) AS nombre FROM empleados WHERE estatus='activo' ORDER BY apellido_paterno,nombre")->fetch_all(MYSQLI_ASSOC);
+$departamentos = fetchAll($db->query('SELECT id,nombre FROM departamentos WHERE activo=1 ORDER BY nombre'));
+$empleadosAll  = fetchAll($db->query("SELECT id, CONCAT(nombre,' ',apellido_paterno) AS nombre FROM empleados WHERE estatus='activo' ORDER BY apellido_paterno,nombre"));
 
 /* ── Vista: Día ── */
 $roster = [];
 if ($view === 'dia') {
     $deptWhere = $f_dept ? "AND e.departamento_id=$f_dept" : '';
-    $roster = $db->query(
+    $roster = fetchAll($db->query(
         "SELECT e.id, e.numero_empleado,
                 CONCAT(e.nombre,' ',e.apellido_paterno) AS nombre_completo,
                 e.jornada_horas, e.hora_entrada_esperada, e.tolerancia_min,
@@ -188,7 +193,7 @@ if ($view === 'dia') {
          LEFT JOIN asistencia a ON a.empleado_id = e.id AND a.fecha = '$fecha'
          WHERE e.estatus = 'activo' $deptWhere
          ORDER BY d.nombre, e.apellido_paterno, e.nombre"
-    )->fetch_all(MYSQLI_ASSOC);
+    ));
 }
 
 /* ── Vista: Resumen mensual ── */
@@ -197,7 +202,7 @@ $pivotData   = [];
 $diasEnMes   = 0;
 if ($view === 'resumen') {
     $deptWhere = $f_dept ? "AND e.departamento_id=$f_dept" : '';
-    $resumenEmps = $db->query(
+    $resumenEmps = fetchAll($db->query(
         "SELECT e.id, e.numero_empleado,
                 CONCAT(e.nombre,' ',e.apellido_paterno) AS nombre_completo,
                 d.nombre AS dept_nombre
@@ -205,13 +210,13 @@ if ($view === 'resumen') {
          LEFT JOIN departamentos d ON d.id = e.departamento_id
          WHERE e.estatus='activo' $deptWhere
          ORDER BY d.nombre, e.apellido_paterno"
-    )->fetch_all(MYSQLI_ASSOC);
+    ));
 
-    $asistMes = $db->query(
+    $asistMes = fetchAll($db->query(
         "SELECT empleado_id, fecha, tipo, horas_trabajadas, horas_extra, retardo, minutos_retardo
          FROM asistencia
          WHERE fecha BETWEEN '$mes_ini' AND '$mes_fin'"
-    )->fetch_all(MYSQLI_ASSOC);
+    ));
 
     $diasEnMes = (int)date('t', strtotime($mes_ini));
     foreach ($resumenEmps as $e) $pivotData[$e['id']] = array_fill(1, $diasEnMes, null);
@@ -224,13 +229,13 @@ if ($view === 'resumen') {
 /* ── Vista: Incidencias ── */
 $incidencias = [];
 if ($view === 'incidencias') {
-    $incidencias = $db->query(
+    $incidencias = fetchAll($db->query(
         "SELECT i.*, CONCAT(e.nombre,' ',e.apellido_paterno) AS emp_nombre, e.numero_empleado
          FROM incidencias i
          JOIN empleados e ON e.id = i.empleado_id
          ORDER BY i.estado ASC, i.fecha_inicio DESC
          LIMIT 200"
-    )->fetch_all(MYSQLI_ASSOC);
+    ));
 }
 
 $db->close();

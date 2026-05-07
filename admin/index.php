@@ -34,6 +34,11 @@ function canal_badge(string $s): string {
     [$c,$l] = $m[$s] ?? ['b-read', $s ?: 'Web'];
     return "<span class='badge $c'>$l</span>";
 }
+function fetchAll($result): array {
+    $rows = [];
+    if ($result) while ($row = $result->fetch_assoc()) $rows[] = $row;
+    return $rows;
+}
 
 /* ── Handle POST actions ──────────────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -132,20 +137,17 @@ $cTotal    = [
 ];
 
 if ($tab === 'aplicaciones' && ($f_estado || $f_canal)) {
-    $whereParts = []; $params = []; $types = '';
-    if ($f_estado) { $whereParts[] = 'estado=?'; $params[] = $f_estado; $types .= 's'; }
-    if ($f_canal)  { $whereParts[] = 'canal=?';  $params[] = $f_canal;  $types .= 's'; }
+    $whereParts = [];
+    if ($f_estado) $whereParts[] = "estado='" . $db->real_escape_string($f_estado) . "'";
+    if ($f_canal)  $whereParts[] = "canal='"  . $db->real_escape_string($f_canal)  . "'";
     $sql  = 'SELECT * FROM aplicaciones_empleo WHERE ' . implode(' AND ', $whereParts) . ' ORDER BY fecha_creacion DESC LIMIT 200';
-    $stmt = $db->prepare($sql);
-    $stmt->bind_param($types, ...$params);
-    $stmt->execute();
-    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $rows = fetchAll($db->query($sql));
 } else {
     $rows = match($tab) {
-        'cotizaciones' => $db->query('SELECT * FROM cotizaciones ORDER BY fecha_creacion DESC LIMIT 200')->fetch_all(MYSQLI_ASSOC),
-        'aplicaciones' => $db->query('SELECT * FROM aplicaciones_empleo ORDER BY fecha_creacion DESC LIMIT 200')->fetch_all(MYSQLI_ASSOC),
-        'vacantes'     => $db->query('SELECT * FROM vacantes ORDER BY activa DESC, fecha_creacion DESC LIMIT 200')->fetch_all(MYSQLI_ASSOC),
-        default        => $db->query('SELECT * FROM contactos ORDER BY leido ASC, fecha_creacion DESC LIMIT 200')->fetch_all(MYSQLI_ASSOC),
+        'cotizaciones' => fetchAll($db->query('SELECT * FROM cotizaciones ORDER BY fecha_creacion DESC LIMIT 200')),
+        'aplicaciones' => fetchAll($db->query('SELECT * FROM aplicaciones_empleo ORDER BY fecha_creacion DESC LIMIT 200')),
+        'vacantes'     => fetchAll($db->query('SELECT * FROM vacantes ORDER BY activa DESC, fecha_creacion DESC LIMIT 200')),
+        default        => fetchAll($db->query('SELECT * FROM contactos ORDER BY leido ASC, fecha_creacion DESC LIMIT 200')),
     };
 }
 
@@ -158,7 +160,7 @@ if ($tab === 'vacantes' && isset($_GET['edit'])) {
 }
 
 /* Vacantes activas para el selector del formulario de candidatos */
-$vacantesOpts = $db->query('SELECT id, titulo FROM vacantes WHERE activa=1 ORDER BY titulo')->fetch_all(MYSQLI_ASSOC);
+$vacantesOpts = fetchAll($db->query('SELECT id, titulo FROM vacantes WHERE activa=1 ORDER BY titulo'));
 
 $db->close();
 
