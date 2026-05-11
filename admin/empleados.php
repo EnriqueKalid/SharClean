@@ -346,6 +346,7 @@ textarea.vf-inp{resize:vertical;}
   <div class="nav-links">
     <a href="index.php">Panel</a>
     <a href="asistencia.php">📅 Asistencia</a>
+    <a href="nomina.php">📋 Nómina</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>

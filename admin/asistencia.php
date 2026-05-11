@@ -334,6 +334,8 @@ input[type=text].inp-sm{width:180px;}
   <div class="nav">
     <a href="index.php">Panel</a>
     <a href="empleados.php">👥 Empleados</a>
+    <a href="asistencia.php">📅 Asistencia</a>
+    <a href="nomina.php">📋 Nómina</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>

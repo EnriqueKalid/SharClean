@@ -60,6 +60,7 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 
 1. `db/migrate_rrhh_v2.sql` ✅
 2. `db/migrate_asistencia_v1.sql` ✅
+3. `db/migrate_nomina_v1.sql` ⬜ Pendiente de ejecutar
 
 ## Estado de módulos RRHH
 
@@ -68,13 +69,21 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 | Reclutamiento (vacantes + candidatos) | `admin/index.php` tabs Vacantes y Aplicaciones | ✅ Completo |
 | Expediente empleados | `admin/empleados.php` | ✅ Completo |
 | Asistencia | `admin/asistencia.php` | ✅ Completo |
-| Nómina | — | ⬜ Pendiente |
+| Nómina | `admin/nomina.php` | ✅ Completo (requiere ejecutar migrate_nomina_v1.sql) |
 | Finiquitos y Liquidaciones (LFT) | — | ⬜ Pendiente |
 | Vacaciones y Permisos | — | ⬜ Pendiente |
 | Reportes | — | ⬜ Pendiente |
 
-## Siguiente módulo a desarrollar: Nómina
+## Siguiente módulo a desarrollar: Vacaciones y Permisos
 
-Depende de que asistencia esté funcionando (horas extra, retardos, faltas alimentan los cálculos).
-Tablas necesarias: `nomina_periodos`, `nomina_empleado`, `nomina_conceptos`.
-Considerar: IMSS (cuotas obrero-patronales), ISR (retención mensual), percepciones variables (horas extra al 200%).
+Módulo para gestionar solicitudes de vacaciones y permisos con flujo de aprobación.
+Se puede usar la tabla `incidencias` ya existente.
+
+## Notas del módulo Nómina
+
+- Tablas: `nomina_periodos`, `nomina_lineas`
+- Tipos: semanal y quincenal
+- Cálculos: IMSS obrero (2025), ISR Art.96 LISR + subsidio al empleo (proyección mensual)
+- Horas extra al 200% (dobles)
+- Exporta CSV con BOM UTF-8 para Excel
+- Constantes fiscales (UMA, tasas IMSS, tablas ISR) están en `admin/nomina.php` — actualizar cada año
