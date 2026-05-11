@@ -87,7 +87,7 @@ $replyHtml = emailLayout('Hemos recibido tu mensaje', "
 <p>Si su consulta es urgente, puede contactarnos directamente:</p>
 <ul style='line-height:2.2;padding-left:20px;'>
   <li>Email: <a href='mailto:informacion@sharclean.com.mx' style='color:#0284C7;'>informacion@sharclean.com.mx</a></li>
-  <li>Teléfono / WhatsApp: +52 55 0000 0000</li>
+  <li>Teléfono / WhatsApp: +52 55-8945-4415</li>
 </ul>
 <p style='color:#64748b;font-size:13px;'>Horario de atención: Lun–Vie 8am–6pm | Sáb 9am–2pm</p>
 ");

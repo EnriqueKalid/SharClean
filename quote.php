@@ -130,7 +130,7 @@ $notifyHtml = emailLayout('Nueva solicitud de cotización', "
 " . ($message ? "<p><strong>Mensaje adicional:</strong></p><p style='background:#f8fafc;border-left:4px solid #0284C7;padding:14px 16px;border-radius:0 6px 6px 0;margin:0;'>" . nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8')) . "</p>" : '') . "
 ");
 
-$mailSent = sendMail('informacion@sharclean.com.mx', "Nueva solicitud de cotización – $name | Sharclean", $notifyHtml, $email);
+$mailSent = sendMail('comercializacion@sharclean.com.mx', "Nueva solicitud de cotización – $name | Sharclean", $notifyHtml, $email);
 if (!$mailSent) error_log('[Sharclean Quote] Failed to send notification email for: ' . $email);
 
 /* ── Auto-reply to client ───────────────────────────────────── */
@@ -142,7 +142,7 @@ $replyHtml = emailLayout('Recibimos tu solicitud', "
 <p>Si necesita atención urgente:</p>
 <ul style='line-height:2.2;padding-left:20px;'>
   <li>Email: <a href='mailto:informacion@sharclean.com.mx' style='color:#0284C7;'>informacion@sharclean.com.mx</a></li>
-  <li>Teléfono / WhatsApp: +52 55 0000 0000</li>
+  <li>Teléfono / WhatsApp: +52 55-8945-4415</li>
 </ul>
 <p style='color:#64748b;font-size:13px;'>Horario: Lun–Vie 8am–6pm | Sáb 9am–2pm</p>
 ");
