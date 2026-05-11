@@ -811,6 +811,47 @@ function injectSpinStyle() {
   document.head.appendChild(style);
 }
 
+/* ── Legal Modals ──────────────────────────────────────────── */
+function initLegalModals() {
+  const modals = {
+    'open-privacy': 'modal-privacy',
+    'open-terms':   'modal-terms',
+  };
+
+  Object.entries(modals).forEach(([triggerId, modalId]) => {
+    const trigger = $('#' + triggerId);
+    const modal   = $('#' + modalId);
+    if (!trigger || !modal) return;
+
+    trigger.addEventListener('click', e => {
+      e.preventDefault();
+      modal.removeAttribute('hidden');
+      document.body.style.overflow = 'hidden';
+      modal.querySelector('.legalmodal__close, [data-close-modal]')?.focus();
+    });
+  });
+
+  // Cerrar con cualquier elemento [data-close-modal] o con Escape
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-close-modal]')) {
+      const modal = e.target.closest('.legalmodal');
+      if (modal) closeModal(modal);
+    }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      const open = $('.legalmodal:not([hidden])');
+      if (open) closeModal(open);
+    }
+  });
+
+  function closeModal(modal) {
+    modal.setAttribute('hidden', '');
+    document.body.style.overflow = '';
+  }
+}
+
 /* ── Init All ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   injectSpinStyle();
@@ -827,4 +868,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initHeroCarousel();
   initAboutCarousel();
   initFileInputs();
+  initLegalModals();
 });
