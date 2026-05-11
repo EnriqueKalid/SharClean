@@ -56,11 +56,10 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 - `asistencia` — registro diario con UNIQUE(empleado_id, fecha)
 - `incidencias` — faltas, permisos, vacaciones con flujo de aprobación
 
-## Migraciones pendientes de ejecutar en servidor
+## Migraciones ejecutadas en servidor
 
-Correr en orden en phpMyAdmin o consola:
-1. `db/migrate_rrhh_v2.sql`
-2. `db/migrate_asistencia_v1.sql`
+1. `db/migrate_rrhh_v2.sql` ✅
+2. `db/migrate_asistencia_v1.sql` ✅
 
 ## Estado de módulos RRHH
 
@@ -68,7 +67,7 @@ Correr en orden en phpMyAdmin o consola:
 |---|---|---|
 | Reclutamiento (vacantes + candidatos) | `admin/index.php` tabs Vacantes y Aplicaciones | ✅ Completo |
 | Expediente empleados | `admin/empleados.php` | ✅ Completo |
-| Asistencia | `admin/asistencia.php` | ✅ Completo (código listo, falta correr migración en servidor) |
+| Asistencia | `admin/asistencia.php` | ✅ Completo |
 | Nómina | — | ⬜ Pendiente |
 | Finiquitos y Liquidaciones (LFT) | — | ⬜ Pendiente |
 | Vacaciones y Permisos | — | ⬜ Pendiente |
