@@ -188,8 +188,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 a{color:inherit;text-decoration:none;}
 .admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
 .admin-header h1{font-size:18px;font-weight:800;}
-.admin-header a{color:rgba(255,255,255,.85);font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px;}
-.admin-header a:hover{background:rgba(255,255,255,.1);}
+.nav-links{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.nav-links a{color:rgba(255,255,255,.85);font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px;white-space:nowrap;transition:.15s}
+.nav-links a:hover{background:rgba(255,255,255,.15)}
+.nav-links a.active{background:rgba(255,255,255,.95);color:#0284C7;font-weight:700;border-color:transparent}
 .body{max-width:1280px;margin:0 auto;padding:24px 16px;}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}
 .stat{background:#fff;border-radius:10px;padding:20px 24px;box-shadow:0 1px 3px rgba(0,0,0,.07);}
@@ -251,11 +253,13 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
 
 <header class="admin-header">
   <h1>Sharclean Admin</h1>
-  <div style="display:flex;gap:8px;align-items:center;">
+  <div class="nav-links">
+    <a href="index.php" class="active">Panel</a>
     <a href="empleados.php">👥 Empleados</a>
     <a href="asistencia.php">📅 Asistencia</a>
     <a href="nomina.php">📋 Nómina</a>
     <a href="vacaciones.php">🏖 Vacaciones</a>
+    <a href="finiquitos.php">💼 Finiquitos</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>

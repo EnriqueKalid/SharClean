@@ -749,7 +749,11 @@ function initApplyForm() {
       const res  = await fetch('apply.php', { method: 'POST', body: new FormData(form) });
       const data = await res.json();
       showFormMsg(msg, data.type, data.msg);
-      if (data.type === 'success') form.reset();
+      if (data.type === 'success') {
+        form.reset();
+        const fileLabel = form.querySelector('.file-input-label');
+        if (fileLabel) fileLabel.innerHTML = '<span>Haz clic aquí</span> para subir tu CV (.pdf o .doc)';
+      }
     } catch {
       showFormMsg(msg, 'error', 'Error de conexión. Intenta de nuevo.');
     } finally {

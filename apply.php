@@ -94,7 +94,7 @@ try {
         "INSERT INTO aplicaciones_empleo (nombre, edad, telefono, email, puesto_interes, experiencia, cv_filename, ip_address, vacante_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
-    $stmt->bind_param('siisssssi', $name, $age, $phone, $email, $position, $experience, $cvFilename, $ip, $vacanteId);
+    $stmt->bind_param('sissssssi', $name, $age, $phone, $email, $position, $experience, $cvFilename, $ip, $vacanteId);
     $stmt->execute();
     $stmt->close();
     $db->close();
@@ -128,6 +128,15 @@ $expInfo
 <br>$cvInfo
 ");
 sendMail('informacion@sharclean.com.mx', "Nueva solicitud de empleo – $position | Sharclean", $notifyHtml, $email);
+
+/* ── Confirmación al solicitante ───────────────────────────── */
+$confirmHtml = emailLayout("Tu solicitud fue recibida – Sharclean", "
+<h2 style='margin:0 0 16px;color:#0284C7;font-size:20px;'>¡Gracias por tu interés, " . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . "!</h2>
+<p style='margin:0 0 16px;color:#475569;line-height:1.6;'>Hemos recibido tu solicitud para el puesto de <strong>" . htmlspecialchars($position, ENT_QUOTES, 'UTF-8') . "</strong>. Nuestro equipo revisará tu información y se pondrá en contacto contigo a la brevedad posible.</p>
+<p style='margin:0 0 24px;color:#475569;line-height:1.6;'>Si tienes alguna duda, puedes escribirnos a <a href='mailto:informacion@sharclean.com.mx' style='color:#0284C7;'>informacion@sharclean.com.mx</a> o llamarnos al <strong>+52 55-8945-4415</strong>.</p>
+<p style='margin:0;color:#94a3b8;font-size:0.875rem;'>Este es un correo automático, por favor no respondas a este mensaje.</p>
+");
+sendMail($email, 'Hemos recibido tu solicitud – Sharclean', $confirmHtml);
 
 echo json_encode([
     'type' => 'success',

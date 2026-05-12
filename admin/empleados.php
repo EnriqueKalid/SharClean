@@ -270,9 +270,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 a{color:inherit;text-decoration:none;}
 .admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
 .admin-header h1{font-size:18px;font-weight:800;}
-.admin-header .nav-links{display:flex;gap:8px;align-items:center;}
-.admin-header a{color:rgba(255,255,255,.85);font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px;}
-.admin-header a:hover{background:rgba(255,255,255,.1);}
+.nav-links{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.nav-links a{color:rgba(255,255,255,.85);font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px;white-space:nowrap;transition:.15s}
+.nav-links a:hover{background:rgba(255,255,255,.15)}
+.nav-links a.active{background:rgba(255,255,255,.95);color:#0284C7;font-weight:700;border-color:transparent}
 .body{max-width:1400px;margin:0 auto;padding:24px 16px;}
 /* Stats */
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}
@@ -343,9 +344,11 @@ textarea.vf-inp{resize:vertical;}
   <h1>👥 Empleados</h1>
   <div class="nav-links">
     <a href="index.php">Panel</a>
+    <a href="empleados.php" class="active">👥 Empleados</a>
     <a href="asistencia.php">📅 Asistencia</a>
     <a href="nomina.php">📋 Nómina</a>
     <a href="vacaciones.php">🏖 Vacaciones</a>
+    <a href="finiquitos.php">💼 Finiquitos</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>
