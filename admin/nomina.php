@@ -569,6 +569,7 @@ select.inp{cursor:pointer;background:#fff}
     <a href="empleados.php">👥 Empleados</a>
     <a href="asistencia.php">📅 Asistencia</a>
     <a href="nomina.php" class="active">📋 Nómina</a>
+    <a href="vacaciones.php">🏖 Vacaciones</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>

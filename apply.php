@@ -84,16 +84,17 @@ $position   = htmlspecialchars(strip_tags($_POST['apply-position']));
 $experience = isset($_POST['apply-experience'])
               ? htmlspecialchars(strip_tags($_POST['apply-experience']))
               : '';
+$vacanteId  = (int)($_POST['vacante_id'] ?? 0) ?: null;
 
 /* ── Guardar en base de datos ──────────────────────────────── */
 $ip = $_SERVER['REMOTE_ADDR'] ?? null;
 try {
     $db   = getDB();
     $stmt = $db->prepare(
-        "INSERT INTO aplicaciones_empleo (nombre, edad, telefono, email, puesto_interes, experiencia, cv_filename, ip_address)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO aplicaciones_empleo (nombre, edad, telefono, email, puesto_interes, experiencia, cv_filename, ip_address, vacante_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
-    $stmt->bind_param('siisssss', $name, $age, $phone, $email, $position, $experience, $cvFilename, $ip);
+    $stmt->bind_param('siisssssi', $name, $age, $phone, $email, $position, $experience, $cvFilename, $ip, $vacanteId);
     $stmt->execute();
     $stmt->close();
     $db->close();

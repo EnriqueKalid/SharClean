@@ -32,6 +32,11 @@ function ctbadge(string $s): string {
     [$c, $l] = $m[$s] ?? ['b-read', $s];
     return "<span class='badge $c'>$l</span>";
 }
+function fetchAll($result): array {
+    $rows = [];
+    if ($result) while ($row = $result->fetch_assoc()) $rows[] = $row;
+    return $rows;
+}
 function sel(string $name, array $opts, mixed $current, string $placeholder = ''): string {
     $out = "<select name='$name' class='vf-inp'>";
     if ($placeholder !== '') $out .= "<option value=''>" . h($placeholder) . "</option>";
@@ -201,29 +206,22 @@ $cBajas   = (int)$db->query("SELECT COUNT(*) FROM empleados WHERE estatus='baja_
 $cTotal   = (int)$db->query('SELECT COUNT(*) FROM empleados')->fetch_row()[0];
 
 /* Catálogos */
-$departamentos = $db->query('SELECT id, nombre FROM departamentos WHERE activo=1 ORDER BY nombre')->fetch_all(MYSQLI_ASSOC);
-$puestos       = $db->query('SELECT id, nombre, departamento_id FROM puestos WHERE activo=1 ORDER BY nombre')->fetch_all(MYSQLI_ASSOC);
+$departamentos = fetchAll($db->query('SELECT id, nombre FROM departamentos WHERE activo=1 ORDER BY nombre'));
+$puestos       = fetchAll($db->query('SELECT id, nombre, departamento_id FROM puestos WHERE activo=1 ORDER BY nombre'));
 
 /* Lista de empleados con filtros */
-$wParts = []; $wParams = []; $wTypes = '';
-if ($f_dept)    { $wParts[] = 'e.departamento_id=?'; $wParams[] = $f_dept;    $wTypes .= 'i'; }
-if ($f_estatus) { $wParts[] = 'e.estatus=?';         $wParams[] = $f_estatus; $wTypes .= 's'; }
+// Valores validados contra allowlists arriba, seguros para query directa
+$where = '1=1';
+if ($f_dept)    $where .= ' AND e.departamento_id=' . (int)$f_dept;
+if ($f_estatus) $where .= " AND e.estatus='" . $db->real_escape_string($f_estatus) . "'";
 
-$sqlBase = 'SELECT e.*, d.nombre AS dept_nombre
+$sqlBase = "SELECT e.*, d.nombre AS dept_nombre
             FROM empleados e
-            LEFT JOIN departamentos d ON d.id = e.departamento_id'
-         . ($wParts ? ' WHERE ' . implode(' AND ', $wParts) : '')
-         . ' ORDER BY FIELD(e.estatus,"activo","vacaciones","incapacidad","baja_temporal","baja_definitiva"), e.nombre ASC
-             LIMIT 500';
-
-if ($wParams) {
-    $stmt = $db->prepare($sqlBase);
-    $stmt->bind_param($wTypes, ...$wParams);
-    $stmt->execute();
-    $empleados = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-} else {
-    $empleados = $db->query($sqlBase)->fetch_all(MYSQLI_ASSOC);
-}
+            LEFT JOIN departamentos d ON d.id = e.departamento_id
+            WHERE $where
+            ORDER BY FIELD(e.estatus,'activo','vacaciones','incapacidad','baja_temporal','baja_definitiva'), e.nombre ASC
+            LIMIT 500";
+$empleados = fetchAll($db->query($sqlBase));
 
 /* Empleado a editar */
 $editEmp = null;
@@ -347,6 +345,7 @@ textarea.vf-inp{resize:vertical;}
     <a href="index.php">Panel</a>
     <a href="asistencia.php">📅 Asistencia</a>
     <a href="nomina.php">📋 Nómina</a>
+    <a href="vacaciones.php">🏖 Vacaciones</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>

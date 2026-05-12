@@ -1,6 +1,15 @@
 <?php
+require_once __DIR__ . '/db/config.php';
 require_once __DIR__ . '/db/csrf.php';
 $csrfToken = generateCsrfToken();
+
+// Cargar vacantes activas desde la BD
+$db = getDB();
+$vacantes = [];
+$res = $db->query("SELECT id, titulo, area, tipo, descripcion, requisitos, ubicacion
+                   FROM vacantes WHERE activa=1 ORDER BY id DESC");
+if ($res) while ($row = $res->fetch_assoc()) $vacantes[] = $row;
+$db->close();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -86,108 +95,66 @@ $csrfToken = generateCsrfToken();
       <p class="section-subtitle">Selecciona el puesto que más se adapte a tu perfil y aplica directamente por WhatsApp o mediante nuestro formulario.</p>
     </div>
 
-    <div class="vacantes-grid">
-
-      <!-- Afanador – CDMX -->
-      <article class="vacante-card reveal reveal-delay-1">
-        <div class="vacante-card__header">
-          <h3 class="vacante-card__title">Afanador</h3>
-          <span class="vacante-card__badge">Activa</span>
-        </div>
-        <div class="vacante-card__meta">
-          <span class="vacante-card__meta-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
-            Operaciones
-          </span>
-          <span class="vacante-card__meta-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Tiempo completo
-          </span>
-          <span class="vacante-card__meta-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            CDMX
-          </span>
-        </div>
-        <p class="vacante-card__reqs">
-          <strong>Requisitos:</strong> No se requiere experiencia previa (capacitamos). Secundaria concluida mínimo. Actitud de servicio, responsabilidad y puntualidad. Disponibilidad para trabajar en distintos turnos y ubicaciones dentro de la Ciudad de México. Prestaciones de ley desde el primer día.
-        </p>
-        <div class="vacante-card__footer">
-          <a href="https://wa.me/5215500000000?text=Hola%20Sharclean%2C%20me%20interesa%20la%20vacante%20de%20Afanador%20en%20CDMX.%20Adjunto%20mi%20informaci%C3%B3n."
-             class="btn btn-green"
-             target="_blank" rel="noopener noreferrer">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-            Aplicar por WhatsApp
-          </a>
-        </div>
-      </article>
-
-      <!-- Afanador – EDOMEX -->
-      <article class="vacante-card reveal reveal-delay-2">
-        <div class="vacante-card__header">
-          <h3 class="vacante-card__title">Afanador</h3>
-          <span class="vacante-card__badge">Activa</span>
-        </div>
-        <div class="vacante-card__meta">
-          <span class="vacante-card__meta-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
-            Operaciones
-          </span>
-          <span class="vacante-card__meta-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Tiempo completo
-          </span>
-          <span class="vacante-card__meta-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            Estado de México
-          </span>
-        </div>
-        <p class="vacante-card__reqs">
-          <strong>Requisitos:</strong> No se requiere experiencia previa (capacitamos). Secundaria concluida mínimo. Actitud de servicio, responsabilidad y puntualidad. Disponibilidad para trabajar en distintos turnos y ubicaciones dentro del Estado de México. Prestaciones de ley desde el primer día.
-        </p>
-        <div class="vacante-card__footer">
-          <a href="https://wa.me/5215500000000?text=Hola%20Sharclean%2C%20me%20interesa%20la%20vacante%20de%20Afanador%20en%20Estado%20de%20M%C3%A9xico.%20Adjunto%20mi%20informaci%C3%B3n."
-             class="btn btn-green"
-             target="_blank" rel="noopener noreferrer">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-            Aplicar por WhatsApp
-          </a>
-        </div>
-      </article>
-
-      <!-- Jardinero -->
-      <article class="vacante-card reveal reveal-delay-3">
-        <div class="vacante-card__header">
-          <h3 class="vacante-card__title">Jardinero</h3>
-          <span class="vacante-card__badge">Activa</span>
-        </div>
-        <div class="vacante-card__meta">
-          <span class="vacante-card__meta-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
-            Operaciones
-          </span>
-          <span class="vacante-card__meta-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Tiempo completo
-          </span>
-          <span class="vacante-card__meta-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            CDMX / EDOMEX
-          </span>
-        </div>
-        <p class="vacante-card__reqs">
-          <strong>Requisitos:</strong> Experiencia mínima de 1 año en jardinería general (poda, riego, mantenimiento de áreas verdes). Conocimiento básico de plantas y herramientas de jardinería. Disponibilidad de horario. Responsable, puntual y con actitud de servicio. Prestaciones de ley desde el primer día.
-        </p>
-        <div class="vacante-card__footer">
-          <a href="https://wa.me/5215500000000?text=Hola%20Sharclean%2C%20me%20interesa%20la%20vacante%20de%20Jardinero.%20Adjunto%20mi%20informaci%C3%B3n."
-             class="btn btn-green"
-             target="_blank" rel="noopener noreferrer">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-            Aplicar por WhatsApp
-          </a>
-        </div>
-      </article>
-
+    <?php if (empty($vacantes)): ?>
+    <div style="text-align:center;padding:60px 20px;color:var(--gray);">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px;opacity:.4"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+      <p style="font-size:1.1rem;font-weight:600;margin-bottom:8px;">No hay vacantes disponibles en este momento</p>
+      <p style="font-size:.9rem;">Déjanos tus datos en el formulario de abajo y te contactaremos cuando haya una oportunidad.</p>
     </div>
+    <?php else: ?>
+    <div class="vacantes-grid">
+      <?php
+      $delays = ['reveal-delay-1','reveal-delay-2','reveal-delay-3'];
+      $svgBriefcase = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>';
+      $svgClock     = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+      $svgPin       = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+      $svgWa        = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>';
+      foreach ($vacantes as $i => $v):
+        $delay  = $delays[$i % 3];
+        $titulo = htmlspecialchars($v['titulo'],     ENT_QUOTES, 'UTF-8');
+        $area   = htmlspecialchars($v['area']   ?? '', ENT_QUOTES, 'UTF-8');
+        $tipo   = htmlspecialchars($v['tipo']   ?? '', ENT_QUOTES, 'UTF-8');
+        $ubic   = htmlspecialchars($v['ubicacion'] ?? '', ENT_QUOTES, 'UTF-8');
+        $desc   = htmlspecialchars($v['descripcion'] ?? '', ENT_QUOTES, 'UTF-8');
+        $req    = htmlspecialchars($v['requisitos']  ?? '', ENT_QUOTES, 'UTF-8');
+        $waMsg  = urlencode("Hola Sharclean, me interesa la vacante de $v[titulo]" . ($v['ubicacion'] ? " en $v[ubicacion]" : '') . ". Adjunto mi información.");
+      ?>
+      <article class="vacante-card reveal <?= $delay ?>">
+        <div class="vacante-card__header">
+          <h3 class="vacante-card__title"><?= $titulo ?></h3>
+          <span class="vacante-card__badge">Activa</span>
+        </div>
+        <div class="vacante-card__meta">
+          <?php if ($area): ?>
+          <span class="vacante-card__meta-item"><?= $svgBriefcase ?><?= $area ?></span>
+          <?php endif ?>
+          <?php if ($tipo): ?>
+          <span class="vacante-card__meta-item"><?= $svgClock ?><?= $tipo ?></span>
+          <?php endif ?>
+          <?php if ($ubic): ?>
+          <span class="vacante-card__meta-item"><?= $svgPin ?><?= $ubic ?></span>
+          <?php endif ?>
+        </div>
+        <?php if ($desc): ?>
+        <p style="font-size:.88rem;color:var(--gray);margin-bottom:.75rem;line-height:1.6;"><?= $desc ?></p>
+        <?php endif ?>
+        <?php if ($req): ?>
+        <p class="vacante-card__reqs"><strong>Requisitos:</strong> <?= $req ?></p>
+        <?php endif ?>
+        <div class="vacante-card__footer">
+          <a href="https://wa.me/5215589454415?text=<?= $waMsg ?>"
+             class="btn btn-green" target="_blank" rel="noopener noreferrer">
+            <?= $svgWa ?> Aplicar por WhatsApp
+          </a>
+          <a href="#apply-form" class="btn btn-secondary btn--sm"
+             onclick="document.getElementById('apply-position').value='<?= addslashes($v['titulo']) ?>';document.getElementById('apply-vacante-id').value='<?= (int)$v['id'] ?>';">
+            Aplicar con formulario ↓
+          </a>
+        </div>
+      </article>
+      <?php endforeach ?>
+    </div>
+    <?php endif ?>
   </div>
 </section>
 
@@ -202,9 +169,10 @@ $csrfToken = generateCsrfToken();
       <p class="section-subtitle">Completa el formulario y nos pondremos en contacto contigo para una entrevista. ¡Tu próximo trabajo está aquí!</p>
     </div>
 
-    <div class="apply-form reveal">
+    <div class="apply-form reveal" id="apply-form">
       <form id="applyForm" novalidate enctype="multipart/form-data">
-        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+        <input type="hidden" name="csrf_token"  value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+        <input type="hidden" name="vacante_id"  id="apply-vacante-id" value="">
         <div class="form-grid">
 
           <div class="form-group">
@@ -231,11 +199,11 @@ $csrfToken = generateCsrfToken();
             <label class="form-label form-label--light" for="apply-position">Puesto de interés *</label>
             <select class="form-input form-input--light" id="apply-position" name="apply-position" required style="background:var(--light);border:1.5px solid rgba(15,23,42,0.10);color:var(--dark);padding:0.8rem 1rem;border-radius:var(--radius-md);">
               <option value="">— Seleccione un puesto —</option>
-              <option value="Supervisor de Limpieza">Supervisor de Limpieza</option>
-              <option value="Técnico en Mantenimiento">Técnico en Mantenimiento</option>
-              <option value="Operador de Máquinas de Limpieza">Operador de Máquinas de Limpieza</option>
-              <option value="Auxiliar de Limpieza">Auxiliar de Limpieza</option>
-              <option value="Auxiliar Administrativo">Auxiliar Administrativo</option>
+              <?php foreach ($vacantes as $v): ?>
+              <option value="<?= htmlspecialchars($v['titulo'], ENT_QUOTES, 'UTF-8') ?>">
+                <?= htmlspecialchars($v['titulo'], ENT_QUOTES, 'UTF-8') ?><?= $v['ubicacion'] ? ' – '.htmlspecialchars($v['ubicacion'], ENT_QUOTES, 'UTF-8') : '' ?>
+              </option>
+              <?php endforeach ?>
               <option value="Otro">Otro (especificar en experiencia)</option>
             </select>
           </div>

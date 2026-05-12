@@ -336,6 +336,7 @@ input[type=text].inp-sm{width:180px;}
     <a href="empleados.php">👥 Empleados</a>
     <a href="asistencia.php">📅 Asistencia</a>
     <a href="nomina.php">📋 Nómina</a>
+    <a href="vacaciones.php">🏖 Vacaciones</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>
