@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
+requirePermiso('panel');
 require_once __DIR__ . '/../db/csrf.php';
 
 /* ── Helpers ──────────────────────────────────────────────── */
@@ -251,23 +252,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
 </head>
 <body>
 
-<header class="admin-header">
-  <div class="admin-brand">
-    <img src="../images/logo.png" alt="Sharclean">
-    <h1>Panel de Control</h1>
-  </div>
-  <div class="nav-links">
-    <a href="index.php" class="active">Panel</a>
-    <a href="empleados.php">👥 Empleados</a>
-    <a href="asistencia.php">📅 Asistencia</a>
-    <a href="nomina.php">📋 Nómina</a>
-    <a href="vacaciones.php">🏖 Vacaciones</a>
-    <a href="finiquitos.php">💼 Finiquitos</a>
-    <a href="reportes.php">📊 Reportes</a>
-    <a href="configuracion.php">⚙️ Config</a>
-    <a href="logout.php">Cerrar sesión</a>
-  </div>
-</header>
+<?php $navTitle = 'Panel de Control'; $activeModule = 'panel'; require __DIR__ . '/_nav.php'; ?>
 
 <div class="body">
 

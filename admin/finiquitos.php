@@ -4,6 +4,7 @@
  * Sharclean RRHH
  */
 require_once __DIR__ . '/auth.php';
+requirePermiso('finiquitos');
 
 function fetchAll($result): array {
     $rows = [];
@@ -385,23 +386,7 @@ textarea{resize:vertical;min-height:80px}
 </head>
 <body>
 
-<header class="admin-header">
-  <div class="admin-brand">
-    <img src="../images/logo.png" alt="Sharclean">
-    <h1>💼 Finiquitos y Liquidaciones</h1>
-  </div>
-  <div class="nav-links">
-    <a href="index.php">Panel</a>
-    <a href="empleados.php">👥 Empleados</a>
-    <a href="asistencia.php">📅 Asistencia</a>
-    <a href="nomina.php">📋 Nómina</a>
-    <a href="vacaciones.php">🏖 Vacaciones</a>
-    <a href="finiquitos.php" class="active">💼 Finiquitos</a>
-    <a href="reportes.php">📊 Reportes</a>
-    <a href="configuracion.php">⚙️ Config</a>
-    <a href="logout.php">Cerrar sesión</a>
-  </div>
-</header>
+<?php $navTitle = '💼 Finiquitos y Liquidaciones'; $activeModule = 'finiquitos'; require __DIR__ . '/_nav.php'; ?>
 
 <div class="container">
 

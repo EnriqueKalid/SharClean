@@ -392,9 +392,11 @@ function initChatbot() {
   }
 
   /* ── Recruitment flow ─────────────────────────────────────── */
-  let recruitMode = false;
-  let recruitStep = 0;
-  const recruitData = {};
+  const cfg = window.siteCfg || { empresa: 'Sharclean', emailInfo: 'informacion@sharclean.com.mx', telefono: '' };
+  let recruitMode     = false;
+  let recruitStep     = 0;
+  let waitingForDias  = false;
+  const recruitData   = {};
 
   const RECRUIT_STEPS = [
     { key: 'nombre',        type: 'text',
@@ -406,10 +408,10 @@ function initChatbot() {
       prompt: '¿Qué edad tienes? (Escribe solo el número):' },
     { key: 'experiencia',   type: 'choices',
       prompt: '¿Tienes experiencia previa en limpieza?',
-      choices: ['Sí, más de 6 meses', 'Sí, menos de 6 meses', 'Sin experiencia, con ganas de aprender'] },
+      choices: ['Sí, tengo más de 6 meses de experiencia', 'Sí, pero tengo menos de 6 meses', 'No tengo experiencia, pero tengo muchas ganas de aprender'] },
     { key: 'traslado',      type: 'choices',
-      prompt: '¿Cuánto tiempo haces de tu casa a la zona donde buscas empleo?',
-      choices: ['Menos de 45 minutos', 'Entre 45 min y 1 hora y media', 'Más de 1 hora y media'] },
+      prompt: 'Para nosotros es importante que tu lugar de trabajo te quede cerca. ¿Cuánto tiempo haces de tu casa a la zona donde buscas empleo?',
+      choices: ['Menos de 45 minutos', 'Entre 45 minutos y 1 hora y media', 'Más de 1 hora y media'] },
     { key: 'salud',         type: 'choices',
       prompt: 'En Sharclean nos preocupamos por tu seguridad, ya que el trabajo requiere esfuerzo físico. ¿Padeces alguna enfermedad crónica o lesión que debamos conocer para asignarte actividades adecuadas?',
       choices: ['Sí', 'No'] },
@@ -418,7 +420,7 @@ function initChatbot() {
       choices: ['Sí', 'No'] },
     { key: 'disponibilidad', type: 'choices',
       prompt: '¿Cuentas con disponibilidad para empezar a trabajar de inmediato?',
-      choices: ['Sí, puedo empezar mañana mismo', 'Necesito unos días', 'No por el momento'] },
+      choices: ['Sí, puedo empezar mañana mismo', 'Necesito unos días (especifica cuántos)', 'No por el momento'] },
     { key: 'telefono',      type: 'text',
       prompt: '¡Ya casi terminamos! ¿Cuál es tu número de teléfono? Un reclutador te contactará en las próximas 24-48 horas.' },
   ];
@@ -432,7 +434,7 @@ function initChatbot() {
     setTimeout(() => {
       hideTyping();
       appendMsg(
-        '¡Hola! Gracias por tu interés en unirte al equipo de Sharclean. ' +
+        '¡Hola! Gracias por tu interés en unirte al equipo de ' + cfg.empresa + '. ' +
         'Soy tu asistente virtual y te ayudaré a postularte. Esta charla durará menos de 5 minutos. 😊',
         'bot'
       );
@@ -488,14 +490,37 @@ function initChatbot() {
       return;
     }
 
+    if (step.key === 'disponibilidad' && choice.startsWith('Necesito unos días')) {
+      waitingForDias = true;
+      showTyping();
+      setTimeout(() => {
+        hideTyping();
+        appendMsg('¿En cuántos días aproximadamente podrías empezar? (Escribe el número):', 'bot');
+        setRecruitInput(true);
+        input.placeholder = 'Ej: 3, 5, 7 días...';
+        input.focus();
+      }, 600);
+      return;
+    }
+
     recruitData[step.key] = choice;
     recruitStep++;
     advanceRecruitStep();
   }
 
   function handleRecruitTextInput(msg) {
+    const val = msg.trim();
+
+    if (waitingForDias) {
+      waitingForDias = false;
+      appendMsg(val, 'user');
+      recruitData.disponibilidad = 'Necesito ' + val + ' días';
+      recruitStep++;
+      advanceRecruitStep();
+      return;
+    }
+
     const step = RECRUIT_STEPS[recruitStep];
-    const val  = msg.trim();
 
     if (step.key === 'edad') {
       const age = parseInt(val, 10);
@@ -551,16 +576,16 @@ function initChatbot() {
       hideTyping();
       if (data.type === 'success') {
         appendMsg(
-          `¡Excelente, ${recruitData.nombre}! Has completado el primer filtro con éxito. ` +
-          'Un reclutador de Sharclean se pondrá en contacto contigo en las próximas 24 a 48 horas. ¡Ten un excelente día! 🎉',
+          '¡Excelente, ' + recruitData.nombre + '! Has completado el primer filtro con éxito. ' +
+          'Un reclutador de ' + cfg.empresa + ' se pondrá en contacto contigo a este número en las próximas 24 a 48 horas para una entrevista formal. ¡Ten un excelente día! 🎉',
           'bot'
         );
       } else {
-        appendMsg('Hubo un problema al enviar tus datos. Por favor escríbenos a: informacion@sharclean.com.mx', 'bot');
+        appendMsg('Hubo un problema al enviar tus datos. Por favor escríbenos a: ' + cfg.emailInfo, 'bot');
       }
     } catch {
       hideTyping();
-      appendMsg('Error de conexión. Por favor escríbenos a: informacion@sharclean.com.mx', 'bot');
+      appendMsg('Error de conexión. Por favor escríbenos a: ' + cfg.emailInfo, 'bot');
     }
     recruitMode = false;
     renderSuggestions(['¿Qué servicios ofrecen?', '¿Zona de cobertura?', 'Contactar asesor']);
@@ -630,12 +655,12 @@ function initChatbot() {
     },
     {
       keywords: ['contacto','llamar','teléfono','número','correo','email','whatsapp','asesor'],
-      response: 'Puede contactarnos por:\n\n📧 Email: informacion@sharclean.com.mx\n💬 WhatsApp disponible en esta página\n\nHorario de atención: Lun–Vie 8am–6pm | Sáb 9am–2pm\n\n¡Respondemos en menos de 2 horas!',
+      response: () => 'Puede contactarnos por:\n\n📧 Email: ' + cfg.emailInfo + '\n💬 WhatsApp disponible en esta página\n\nHorario de atención: Lun–Vie 8am–6pm | Sáb 9am–2pm\n\n¡Respondemos en menos de 2 horas!',
       suggestions: ['¿Cómo cotizo?','¿Cuál es su zona de cobertura?'],
     },
     {
       keywords: ['trabajo','empleo','vacante','postular','sueldo','salario','prestaciones'],
-      response: '¡Nos alegra tu interés! En Sharclean ofrecemos:\n\n• Salario competitivo\n• Prestaciones de ley completas\n• Capacitación constante\n• Buen ambiente laboral\n\n¿Te gustaría postularte directamente aquí o prefieres ver las vacantes disponibles?',
+      response: () => '¡Nos alegra tu interés! En ' + cfg.empresa + ' ofrecemos:\n\n• Salario competitivo\n• Prestaciones de ley completas\n• Capacitación constante\n• Buen ambiente laboral\n\n¿Te gustaría postularte directamente aquí o prefieres ver las vacantes disponibles?',
       suggestions: ['Postularme ahora', 'Ver vacantes'],
     },
     {
@@ -645,7 +670,7 @@ function initChatbot() {
     },
     {
       keywords: ['emergencia','urgente','urgencia','rápido','inmediato','hoy','ahora','24'],
-      response: '¡Sí, atendemos emergencias!\n\n📧 Email: informacion@sharclean.com.mx\n\nEvaluamos cada caso y despachamos personal certificado en el menor tiempo posible.',
+      response: () => '¡Sí, atendemos emergencias!\n\n📧 Email: ' + cfg.emailInfo + '\n\nEvaluamos cada caso y despachamos personal certificado en el menor tiempo posible.',
       suggestions: ['Contactar asesor','¿Cómo cotizo?'],
     },
     {
@@ -707,10 +732,11 @@ function initChatbot() {
       hideTyping();
       const match = matchFaq(msg);
       if (match) {
-        appendMsg(match.response, 'bot');
+        const resp = typeof match.response === 'function' ? match.response() : match.response;
+        appendMsg(resp, 'bot');
         renderSuggestions(match.suggestions);
       } else {
-        appendMsg('No encontré una respuesta específica para su pregunta. Para atenderle mejor:\n\n📧 informacion@sharclean.com.mx\n\nNuestros asesores responden en menos de 2 horas.', 'bot');
+        appendMsg('No encontré una respuesta específica para su pregunta. Para atenderle mejor:\n\n📧 ' + cfg.emailInfo + '\n\nNuestros asesores responden en menos de 2 horas.', 'bot');
         renderSuggestions(['¿Qué servicios ofrecen?','¿Cómo cotizo?','Contactar asesor']);
       }
     }, 600);

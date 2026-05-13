@@ -1,6 +1,12 @@
 <?php
+require_once __DIR__ . '/db/config.php';
+require_once __DIR__ . '/db/app_config.php';
 require_once __DIR__ . '/db/csrf.php';
-$csrfToken = generateCsrfToken();
+$csrfToken   = generateCsrfToken();
+$cfgEmpresa  = appConfig('empresa_nombre',    'Sharclean');
+$cfgGiro     = appConfig('empresa_giro',      'Limpieza y Mantenimiento Profesional');
+$cfgEmailInfo= appConfig('empresa_email_info','informacion@sharclean.com.mx');
+$cfgTelefono = appConfig('empresa_telefono',  '+52 55-8945-4415');
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -23,6 +29,7 @@ $csrfToken = generateCsrfToken();
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/main.css">
+  <script>window.siteCfg={empresa:<?= json_encode($cfgEmpresa) ?>,giro:<?= json_encode($cfgGiro) ?>,emailInfo:<?= json_encode($cfgEmailInfo) ?>,telefono:<?= json_encode($cfgTelefono) ?>};</script>
 </head>
 <body>
 
@@ -844,7 +851,7 @@ $csrfToken = generateCsrfToken();
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7H3a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2z"/><path d="M5 14v5a2 2 0 002 2h10a2 2 0 002-2v-5"/><circle cx="9" cy="17" r="1"/><circle cx="15" cy="17" r="1"/></svg>
       </div>
       <div class="chatbot__header-info">
-        <div class="chatbot__header-name">Asistente Sharclean</div>
+        <div class="chatbot__header-name">Asistente <?= htmlspecialchars($cfgEmpresa, ENT_QUOTES, 'UTF-8') ?></div>
         <div class="chatbot__header-status">En línea ahora</div>
       </div>
       <button class="chatbot__close" aria-label="Cerrar chat">
