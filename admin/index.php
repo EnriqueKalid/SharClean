@@ -186,7 +186,7 @@ function actionForm(string $action, int $id, string $tab, string $csrf, string $
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px;}
 a{color:inherit;text-decoration:none;}
-.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
+.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}.admin-brand{display:flex;align-items:center;gap:10px}.admin-brand img{height:36px}
 .admin-header h1{font-size:18px;font-weight:800;}
 .nav-links{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .nav-links a{color:rgba(255,255,255,.85);font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px;white-space:nowrap;transition:.15s}
@@ -252,7 +252,10 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
 <body>
 
 <header class="admin-header">
-  <h1>Sharclean Admin</h1>
+  <div class="admin-brand">
+    <img src="../images/logo.png" alt="Sharclean">
+    <h1>Sharclean Admin</h1>
+  </div>
   <div class="nav-links">
     <a href="index.php" class="active">Panel</a>
     <a href="empleados.php">👥 Empleados</a>
@@ -260,6 +263,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
     <a href="nomina.php">📋 Nómina</a>
     <a href="vacaciones.php">🏖 Vacaciones</a>
     <a href="finiquitos.php">💼 Finiquitos</a>
+    <a href="reportes.php">📊 Reportes</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>

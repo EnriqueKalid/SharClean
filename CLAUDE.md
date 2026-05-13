@@ -66,9 +66,9 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 
 1. `db/migrate_rrhh_v2.sql` ✅
 2. `db/migrate_asistencia_v1.sql` ✅
-3. `db/migrate_vacaciones_v1.sql` ⬜ Pendiente de ejecutar
-4. `db/migrate_nomina_v1.sql` ⬜ Pendiente de ejecutar
-5. `db/migrate_finiquitos_v1.sql` ⬜ Pendiente de ejecutar
+3. `db/migrate_vacaciones_v1.sql` ✅
+4. `db/migrate_nomina_v1.sql` ✅
+5. `db/migrate_finiquitos_v1.sql` ✅
 
 ## Estado de módulos RRHH
 
@@ -77,14 +77,16 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 | Reclutamiento (vacantes + candidatos) | `admin/index.php` tabs Vacantes y Aplicaciones | ✅ Completo |
 | Expediente empleados | `admin/empleados.php` | ✅ Completo |
 | Asistencia | `admin/asistencia.php` | ✅ Completo |
-| Nómina | `admin/nomina.php` | ✅ Completo (requiere ejecutar migrate_nomina_v1.sql) |
-| Vacaciones y Permisos | `admin/vacaciones.php` + `solicitar.php` | ✅ Completo (requiere ejecutar migrate_vacaciones_v1.sql) |
-| Finiquitos y Liquidaciones (LFT) | `admin/finiquitos.php` | ✅ Completo (requiere ejecutar migrate_finiquitos_v1.sql) |
-| Reportes | — | ⬜ Pendiente |
+| Nómina | `admin/nomina.php` | ✅ Completo |
+| Vacaciones y Permisos | `admin/vacaciones.php` + `solicitar.php` | ✅ Completo |
+| Finiquitos y Liquidaciones (LFT) | `admin/finiquitos.php` | ✅ Completo |
+| Reportes | `admin/reportes.php` | ✅ Completo |
 
-## Siguiente módulo a desarrollar: Reportes
+## Siguiente módulo a desarrollar: Configuración
 
-Módulo de reportes y exportaciones del sistema RRHH.
+Módulo de configuración del sistema para permitir la comercialización de la aplicación.
+Incluirá: datos de la empresa (nombre, logo, RFC, colores), credenciales de correo SMTP,
+y parámetros generales del sistema.
 
 ## Notas del módulo Nómina
 

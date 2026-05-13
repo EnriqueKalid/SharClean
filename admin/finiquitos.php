@@ -320,7 +320,7 @@ if ($view === 'list') {
 :root{--primary:#0284C7;--primary-dark:#0369A1;--danger:#DC2626;--success:#16A34A;--warn:#D97706;--gray:#64748B;--light:#F8FAFC;--border:#E2E8F0;--radius:8px;--shadow:0 1px 3px rgba(0,0,0,.1)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px}
-.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}.admin-brand{display:flex;align-items:center;gap:10px}.admin-brand img{height:36px}
 .admin-header h1{font-size:18px;font-weight:800}
 .nav-links{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .nav-links a{color:rgba(255,255,255,.85);font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px;white-space:nowrap;transition:.15s}
@@ -386,7 +386,10 @@ textarea{resize:vertical;min-height:80px}
 <body>
 
 <header class="admin-header">
-  <h1>💼 Finiquitos y Liquidaciones</h1>
+  <div class="admin-brand">
+    <img src="../images/logo.png" alt="Sharclean">
+    <h1>💼 Finiquitos y Liquidaciones</h1>
+  </div>
   <div class="nav-links">
     <a href="index.php">Panel</a>
     <a href="empleados.php">👥 Empleados</a>
@@ -394,6 +397,7 @@ textarea{resize:vertical;min-height:80px}
     <a href="nomina.php">📋 Nómina</a>
     <a href="vacaciones.php">🏖 Vacaciones</a>
     <a href="finiquitos.php" class="active">💼 Finiquitos</a>
+    <a href="reportes.php">📊 Reportes</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>

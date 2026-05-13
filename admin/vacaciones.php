@@ -190,7 +190,7 @@ $db->close();
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,Arial,sans-serif;font-size:14px;background:#f4f7fb;color:#1e293b}
 a{color:inherit;text-decoration:none}
-.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}.admin-brand{display:flex;align-items:center;gap:10px}.admin-brand img{height:36px}
 .admin-header h1{font-size:18px;font-weight:800}
 .nav-links{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .nav-links a{color:rgba(255,255,255,.85);font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px;white-space:nowrap;transition:.15s}
@@ -236,7 +236,10 @@ tr:hover td{background:#fafbfc}
 <body>
 
 <header class="admin-header">
-  <h1>🏖 Vacaciones y Permisos</h1>
+  <div class="admin-brand">
+    <img src="../images/logo.png" alt="Sharclean">
+    <h1>🏖 Vacaciones y Permisos</h1>
+  </div>
   <div class="nav-links">
     <a href="index.php">Panel</a>
     <a href="empleados.php">👥 Empleados</a>
@@ -244,6 +247,7 @@ tr:hover td{background:#fafbfc}
     <a href="nomina.php">📋 Nómina</a>
     <a href="vacaciones.php" class="active">🏖 Vacaciones</a>
     <a href="finiquitos.php">💼 Finiquitos</a>
+    <a href="reportes.php">📊 Reportes</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>
