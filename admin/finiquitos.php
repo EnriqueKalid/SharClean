@@ -398,6 +398,7 @@ textarea{resize:vertical;min-height:80px}
     <a href="vacaciones.php">🏖 Vacaciones</a>
     <a href="finiquitos.php" class="active">💼 Finiquitos</a>
     <a href="reportes.php">📊 Reportes</a>
+    <a href="configuracion.php">⚙️ Config</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>

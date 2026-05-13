@@ -181,7 +181,7 @@ function actionForm(string $action, int $id, string $tab, string $csrf, string $
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin – Sharclean</title>
+<title>SISIAdmin – Sharclean</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px;}
@@ -254,7 +254,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
 <header class="admin-header">
   <div class="admin-brand">
     <img src="../images/logo.png" alt="Sharclean">
-    <h1>Sharclean Admin</h1>
+    <h1>Panel de Control</h1>
   </div>
   <div class="nav-links">
     <a href="index.php" class="active">Panel</a>
@@ -264,6 +264,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
     <a href="vacaciones.php">🏖 Vacaciones</a>
     <a href="finiquitos.php">💼 Finiquitos</a>
     <a href="reportes.php">📊 Reportes</a>
+    <a href="configuracion.php">⚙️ Config</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>

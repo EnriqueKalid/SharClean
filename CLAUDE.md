@@ -24,8 +24,11 @@ Single-tenant, solo uso interno.
 | `db/migrate_asistencia_v1.sql` | Migración v3: tablas asistencia e incidencias + columnas jornada en empleados |
 | `admin/vacaciones.php` | Aprobación de vacaciones/permisos + auto-asistencia |
 | `admin/finiquitos.php` | Finiquitos y liquidaciones LFT con documento imprimible |
+| `admin/reportes.php` | Reportes RRHH: Empleados, Asistencia, Nómina, Incidencias + export CSV |
+| `admin/configuracion.php` | Configuración del sistema: Empresa, Correo, Sistema |
 | `solicitar.php` | Formulario público para solicitar vacaciones/permisos |
 | `apply.php` | Handler público de postulaciones web |
+| `db/app_config.php` | Helper `appConfig($key)` / `setAppConfig($key, $val)` — carga tabla config con caché estático |
 
 ## Nota crítica — mysqli sin mysqlnd
 
@@ -69,6 +72,7 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 3. `db/migrate_vacaciones_v1.sql` ✅
 4. `db/migrate_nomina_v1.sql` ✅
 5. `db/migrate_finiquitos_v1.sql` ✅
+6. `db/migrate_config_v1.sql` ⬜ Pendiente de ejecutar
 
 ## Estado de módulos RRHH
 
@@ -81,6 +85,7 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 | Vacaciones y Permisos | `admin/vacaciones.php` + `solicitar.php` | ✅ Completo |
 | Finiquitos y Liquidaciones (LFT) | `admin/finiquitos.php` | ✅ Completo |
 | Reportes | `admin/reportes.php` | ✅ Completo |
+| Configuración | `admin/configuracion.php` | ✅ Completo (requiere ejecutar migrate_config_v1.sql) |
 
 ## Siguiente módulo a desarrollar: Configuración
 

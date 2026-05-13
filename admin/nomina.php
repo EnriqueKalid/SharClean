@@ -575,6 +575,7 @@ select.inp{cursor:pointer;background:#fff}
     <a href="vacaciones.php">🏖 Vacaciones</a>
     <a href="finiquitos.php">💼 Finiquitos</a>
     <a href="reportes.php">📊 Reportes</a>
+    <a href="configuracion.php">⚙️ Config</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>

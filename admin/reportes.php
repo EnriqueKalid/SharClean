@@ -320,6 +320,7 @@ tr:hover td{background:#f8fafc}
     <a href="vacaciones.php">🏖 Vacaciones</a>
     <a href="finiquitos.php">💼 Finiquitos</a>
     <a href="reportes.php" class="active">📊 Reportes</a>
+    <a href="configuracion.php">⚙️ Config</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>
@@ -328,7 +329,7 @@ tr:hover td{background:#f8fafc}
 
   <!-- Tabs -->
   <div class="tabs">
-    <?php foreach (['headcount'=>'👥 Headcount','asistencia'=>'📅 Asistencia','nomina'=>'📋 Nómina','incidencias'=>'📋 Incidencias'] as $t=>$lbl): ?>
+    <?php foreach (['headcount'=>'👥 Empleados','asistencia'=>'📅 Asistencia','nomina'=>'📋 Nómina','incidencias'=>'📋 Incidencias'] as $t=>$lbl): ?>
       <button class="tab-btn <?= $tab===$t?'active':'' ?>" onclick="location.href='?tab=<?= $t ?>&fi=<?= h($fi) ?>&ff=<?= h($ff) ?>'">
         <?= $lbl ?>
       </button>
@@ -344,8 +345,23 @@ tr:hover td{background:#f8fafc}
   }
   ?>
 
-  <!-- ═══════════════════════════════════ HEADCOUNT ═══════════════════════ -->
+  <!-- ═══════════════════════════════════ EMPLEADOS ═══════════════════════ -->
   <?php if ($tab === 'headcount'): ?>
+
+  <form method="get" class="filter-bar">
+    <input type="hidden" name="tab" value="headcount">
+    <label>Estatus
+      <select name="estatus" onchange="this.form.submit()">
+        <option value="">Todos los estatus</option>
+        <option value="activo"          <?= $est_f==='activo'?'selected':'' ?>>Activo</option>
+        <option value="baja_definitiva" <?= $est_f==='baja_definitiva'?'selected':'' ?>>Baja definitiva</option>
+        <option value="vacaciones"      <?= $est_f==='vacaciones'?'selected':'' ?>>Vacaciones</option>
+        <option value="incapacidad"     <?= $est_f==='incapacidad'?'selected':'' ?>>Incapacidad</option>
+        <option value="baja_temporal"   <?= $est_f==='baja_temporal'?'selected':'' ?>>Baja temporal</option>
+      </select>
+    </label>
+    <a href="?tab=headcount&export=headcount&estatus=<?= h($est_f) ?>" class="btn btn-outline">⬇ CSV</a>
+  </form>
 
   <div class="stats-row">
     <div class="stat-card"><div class="val"><?= $hc_total ?></div><div class="lbl">Total empleados</div></div>
@@ -368,21 +384,7 @@ tr:hover td{background:#f8fafc}
 
   <div class="tbl-wrap">
     <div class="tbl-head">
-      <h3>Directorio de empleados</h3>
-      <div style="display:flex;gap:8px;align-items:center">
-        <form method="get" style="display:flex;gap:8px;align-items:center">
-          <input type="hidden" name="tab" value="headcount">
-          <select name="estatus" onchange="this.form.submit()" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px">
-            <option value="">Todos los estatus</option>
-            <option value="activo"          <?= $est_f==='activo'?'selected':'' ?>>Activo</option>
-            <option value="baja_definitiva" <?= $est_f==='baja_definitiva'?'selected':'' ?>>Baja definitiva</option>
-            <option value="vacaciones"      <?= $est_f==='vacaciones'?'selected':'' ?>>Vacaciones</option>
-            <option value="incapacidad"     <?= $est_f==='incapacidad'?'selected':'' ?>>Incapacidad</option>
-            <option value="baja_temporal"   <?= $est_f==='baja_temporal'?'selected':'' ?>>Baja temporal</option>
-          </select>
-        </form>
-        <a href="?tab=headcount&export=headcount&fi=<?= h($fi) ?>&ff=<?= h($ff) ?>" class="btn btn-outline btn-sm">⬇ CSV</a>
-      </div>
+      <h3>Directorio de empleados<?= $est_f ? ' — '.h($est_f) : '' ?></h3>
     </div>
     <?php if (empty($hc_lista)): ?>
       <div class="no-data">Sin resultados</div>

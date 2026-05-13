@@ -248,6 +248,7 @@ tr:hover td{background:#fafbfc}
     <a href="vacaciones.php" class="active">🏖 Vacaciones</a>
     <a href="finiquitos.php">💼 Finiquitos</a>
     <a href="reportes.php">📊 Reportes</a>
+    <a href="configuracion.php">⚙️ Config</a>
     <a href="logout.php">Cerrar sesión</a>
   </div>
 </header>

@@ -81,7 +81,10 @@ try {
 }
 
 /* ── Notificación por correo ───────────────────────────────── */
+require_once __DIR__ . '/db/app_config.php';
 require_once __DIR__ . '/db/mailer.php';
+$cfgEmpresa   = appConfig('empresa_nombre',     'Sharclean');
+$cfgEmailInfo = appConfig('empresa_email_info', 'informacion@sharclean.com.mx');
 
 $salud_txt = $condicion_salud ? 'Sí' : 'No';
 $dep_txt   = $dependientes    ? 'Sí' : 'No';
@@ -130,6 +133,6 @@ $html = emailLayout("Nuevo candidato vía Chatbot – $nombre", "
 <p style='margin:0;font-size:12px;color:#94a3b8;'>Recibido desde el chatbot de reclutamiento – " . date('d/m/Y H:i') . "</p>
 ");
 
-sendMail('informacion@sharclean.com.mx', "Nuevo candidato Chatbot – $nombre | Sharclean", $html);
+sendMail($cfgEmailInfo, "Nuevo candidato Chatbot – $nombre | $cfgEmpresa", $html);
 
 echo json_encode(['type' => 'success']);

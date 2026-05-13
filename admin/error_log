@@ -1,0 +1,161 @@
+[27-Mar-2026 03:55:27 UTC] PHP Parse error:  syntax error, unexpected '=>' (T_DOUBLE_ARROW) in /home/sharclea/public_html/admin/index.php on line 75
+[27-Mar-2026 03:56:55 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function str_starts_with() in /home/sharclea/public_html/db/config.php:14
+Stack trace:
+#0 /home/sharclea/public_html/admin/login.php(12): require_once()
+#1 {main}
+  thrown in /home/sharclea/public_html/db/config.php on line 14
+[27-Mar-2026 03:57:55 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function str_starts_with() in /home/sharclea/public_html/db/config.php:14
+Stack trace:
+#0 /home/sharclea/public_html/admin/login.php(12): require_once()
+#1 {main}
+  thrown in /home/sharclea/public_html/db/config.php on line 14
+[27-Mar-2026 20:54:33 UTC] PHP Parse error:  syntax error, unexpected '=>' (T_DOUBLE_ARROW) in /home/sharclea/public_html/admin/index.php on line 75
+[10-Apr-2026 20:17:21 UTC] PHP Parse error:  syntax error, unexpected '=>' (T_DOUBLE_ARROW) in /home/sharclea/public_html/admin/index.php on line 75
+[10-Apr-2026 20:32:07 UTC] PHP Warning:  mysqli::__construct(): (42000/1044): Access denied for user 'sharclea_sa'@'localhost' to database 'sharclean_db' in /home/sharclea/public_html/db/config.php on line 33
+[10-Apr-2026 20:32:07 UTC] [Sharclean DB] Connection failed: Access denied for user 'sharclea_sa'@'localhost' to database 'sharclean_db'
+[10-Apr-2026 20:39:36 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:77
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 77
+[10-Apr-2026 20:39:38 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:77
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 77
+[10-Apr-2026 20:39:42 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:77
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 77
+[10-Apr-2026 20:39:46 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:77
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 77
+[10-Apr-2026 20:39:49 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:77
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 77
+[10-Apr-2026 20:39:58 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:77
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 77
+[10-Apr-2026 20:40:04 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:77
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 77
+[10-Apr-2026 20:42:27 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:77
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 77
+[10-Apr-2026 20:42:29 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:77
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 77
+[10-Apr-2026 20:42:39 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:77
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 77
+[10-Apr-2026 20:45:49 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:79
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 79
+[10-Apr-2026 20:49:29 UTC] PHP Fatal error:  strict_types declaration must be the very first statement in the script in /home/sharclea/public_html/admin/index.php on line 4
+[10-Apr-2026 20:49:49 UTC] PHP Fatal error:  strict_types declaration must be the very first statement in the script in /home/sharclea/public_html/admin/index.php on line 4
+[10-Apr-2026 20:53:33 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:81
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 81
+[01-May-2026 16:33:36 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:148
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 148
+[01-May-2026 16:33:40 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:148
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 148
+[01-May-2026 18:59:16 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:148
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 148
+[05-May-2026 03:29:13 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:148
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 148
+[05-May-2026 03:29:16 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:148
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 148
+[05-May-2026 03:29:18 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:148
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 148
+[05-May-2026 03:29:28 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:148
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 148
+[05-May-2026 03:29:37 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:148
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 148
+[07-May-2026 05:53:09 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:148
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 148
+[07-May-2026 06:08:19 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:148
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 148
+[07-May-2026 06:08:23 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:148
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 148
+[07-May-2026 06:09:50 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/index.php:150
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/index.php on line 150
+[11-May-2026 18:19:10 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/empleados.php:204
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 204
+[11-May-2026 18:19:15 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/empleados.php:204
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 204
+[11-May-2026 19:13:15 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/empleados.php:204
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 204
+[11-May-2026 19:13:32 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/empleados.php:204
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 204
+[11-May-2026 19:14:04 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/empleados.php:204
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 204
+[11-May-2026 19:14:06 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/empleados.php:204
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 204
+[11-May-2026 19:23:34 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/empleados.php:204
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 204
+[11-May-2026 19:23:38 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/empleados.php:204
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 204
+[11-May-2026 19:25:57 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/empleados.php:204
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 204
+[11-May-2026 19:34:03 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/empleados.php:204
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 204
+[11-May-2026 19:40:46 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/empleados.php:204
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 204
+[11-May-2026 22:25:42 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method mysqli_result::fetch_all() in /home/sharclea/public_html/admin/empleados.php:204
+Stack trace:
+#0 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 204
