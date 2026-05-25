@@ -74,7 +74,7 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 5. `db/migrate_finiquitos_v1.sql` ✅
 6. `db/migrate_config_v1.sql` ✅
 7. `db/migrate_chatbot_v1.sql` ✅
-8. `db/migrate_usuarios_v1.sql` ⬜ Pendiente de ejecutar (tablas admin_perfiles y admin_usuarios)
+8. `db/migrate_usuarios_v1.sql` ✅
 
 ## Estado de módulos RRHH
 

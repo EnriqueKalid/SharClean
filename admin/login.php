@@ -4,7 +4,7 @@ declare(strict_types=1);
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 if (!empty($_SESSION['admin_logged_in'])) {
-    header('Location: index.php');
+    header('Location: dashboard.php');
     exit;
 }
 
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int)$row['id'];
             $db->query("UPDATE admin_usuarios SET ultimo_login=NOW() WHERE id=$id");
             $db->close();
-            header('Location: index.php');
+            header('Location: dashboard.php');
             exit;
         }
         $error = 'Usuario o contraseña incorrectos.';
@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             session_regenerate_id(true);
             $_SESSION['admin_logged_in'] = true;
             $db->close();
-            header('Location: index.php');
+            header('Location: dashboard.php');
             exit;
         }
         $error = 'Usuario o contraseña incorrectos.';

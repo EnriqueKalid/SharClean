@@ -24,6 +24,7 @@ $_mod  = $activeModule ?? '';
     <h1><?= $navTitle ?? 'Admin' ?></h1>
   </div>
   <div class="nav-links">
+    <a href="dashboard.php"    <?= $_mod==='dashboard'    ?'class="active"':'' ?>>🏠 Inicio</a>
     <?php if (hasPermiso('panel')): ?>
     <a href="index.php"        <?= $_mod==='panel'        ?'class="active"':'' ?>>Panel</a>
     <?php endif ?>

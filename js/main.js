@@ -340,7 +340,8 @@ function initChatbot() {
   const suggestionsEl= $('.chatbot__suggestions', chatbot);
   const badge        = $('.chatbot__badge', chatbot);
 
-  let isOpen = false;
+  let isOpen        = false;
+  let lastShownFaqIdx = -1;  // evita repetir el mismo FAQ consecutivamente
 
   function open() {
     isOpen = true;
@@ -360,8 +361,10 @@ function initChatbot() {
   function appendMsg(text, role = 'bot', time = formatTime()) {
     const div = document.createElement('div');
     div.className = `chatbot__msg chatbot__msg--${role}`;
+    // Convertir saltos de línea a <br> para que el formato del FAQ se vea bien
+    const safeHtml = escapeHtml(text).replace(/\n/g, '<br>');
     div.innerHTML = `
-      <div class="chatbot__msg-bubble">${escapeHtml(text)}</div>
+      <div class="chatbot__msg-bubble">${safeHtml}</div>
       <span class="chatbot__msg-time">${time}</span>`;
     messages.appendChild(div);
     scrollToBottom();
@@ -660,8 +663,8 @@ function initChatbot() {
     },
     {
       keywords: ['trabajo','empleo','vacante','postular','sueldo','salario','prestaciones'],
-      response: () => '¡Nos alegra tu interés! En ' + cfg.empresa + ' ofrecemos:\n\n• Salario competitivo\n• Prestaciones de ley completas\n• Capacitación constante\n• Buen ambiente laboral\n\n¿Te gustaría postularte directamente aquí o prefieres ver las vacantes disponibles?',
-      suggestions: ['Postularme ahora', 'Ver vacantes'],
+      response: () => '¡Nos alegra tu interés! En ' + cfg.empresa + ' ofrecemos:\n\n• Salario competitivo\n• Prestaciones de ley completas\n• Capacitación constante\n• Buen ambiente laboral\n\nIniciando el proceso de postulación...',
+      suggestions: [],
     },
     {
       keywords: ['garantía','garantia','seguro','asegurado','certificación','calidad'],
@@ -694,20 +697,39 @@ function initChatbot() {
 
   function matchFaq(msg) {
     const lower = msg.toLowerCase();
-    const words = lower.split(/[\s,;.!?]+/).filter(w => w && !stopWords.has(w));
-    let best = null, bestScore = 0;
-    for (const faq of faqs) {
+    // Solo palabras de 3+ caracteres que no sean stopwords
+    const words = lower.split(/[\s,;.!?]+/).filter(w => w.length >= 3 && !stopWords.has(w));
+    let best = null, bestScore = 0, bestIdx = -1;
+
+    for (let i = 0; i < faqs.length; i++) {
+      const faq = faqs[i];
       let score = 0;
       for (const kw of faq.keywords) {
-        if (lower.includes(kw)) score += 2;
-        for (const w of words) {
-          if (w.includes(kw) || kw.includes(w)) score += 1;
+        // Coincidencia exacta de frase: mayor peso
+        if (lower.includes(kw)) {
+          score += 2;
+        } else {
+          // Solo coincidencia exacta de palabra (no substring parcial)
+          for (const w of words) {
+            if (w === kw) score += 1;
+          }
         }
       }
-      if (score > bestScore) { bestScore = score; best = faq; }
+      // Penalizar el último FAQ mostrado para evitar repetición inmediata
+      if (i === lastShownFaqIdx) score = Math.max(0, score - 3);
+
+      if (score > bestScore) { bestScore = score; best = faq; bestIdx = i; }
     }
-    return bestScore >= 2 ? best : null;
+
+    if (bestScore >= 2) {
+      lastShownFaqIdx = bestIdx;
+      return best;
+    }
+    return null;
   }
+
+  // Palabras clave que arrancan directamente el flujo de reclutamiento
+  const RECRUIT_KEYWORDS = ['postularme','postular','empleo','trabajo','vacante','vacantes','contratar','trabaj','sueldo','salario','prestaciones'];
 
   function sendMessage(text) {
     const msg = (text || input.value).trim();
@@ -717,13 +739,60 @@ function initChatbot() {
 
     if (recruitMode) { handleRecruitTextInput(msg); return; }
 
-    if (msg === 'Postularme ahora') {
+    // ── Sugerencias especiales con acción propia ───────────────
+    if (msg === 'Postularme ahora' || msg === '💼 Quiero postularme') {
       appendMsg(msg, 'user');
       suggestionsEl.innerHTML = '';
       startRecruitment();
       return;
     }
 
+    if (msg === 'Ver vacantes') {
+      appendMsg(msg, 'user');
+      showTyping();
+      setTimeout(() => {
+        hideTyping();
+        appendMsg('Te llevo a las vacantes disponibles 👉', 'bot');
+        setTimeout(() => { window.location.href = 'vacantes.php'; }, 700);
+      }, 400);
+      return;
+    }
+
+    if (msg === 'Solicitar cotización' || msg === 'Ir al formulario de cotización') {
+      appendMsg(msg, 'user');
+      close();
+      const sec = document.getElementById('cotizacion') || document.getElementById('quote') || document.querySelector('[data-section="cotizacion"]');
+      if (sec) sec.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+
+    if (msg === 'Contactar asesor') {
+      appendMsg(msg, 'user');
+      showTyping();
+      setTimeout(() => {
+        hideTyping();
+        appendMsg('Puedes contactarnos directamente:\n\n📧 ' + cfg.emailInfo + '\n\n¡Respondemos en menos de 2 horas! 😊', 'bot');
+        renderSuggestions(['¿Qué servicios ofrecen?', '¿Cómo cotizo?']);
+      }, 500);
+      return;
+    }
+
+    // ── Si escribe algo relacionado con empleo, arrancar reclutamiento ──
+    const msgLower = msg.toLowerCase();
+    const isJobRelated = RECRUIT_KEYWORDS.some(k => msgLower.includes(k));
+    if (isJobRelated) {
+      appendMsg(msg, 'user');
+      suggestionsEl.innerHTML = '';
+      showTyping();
+      setTimeout(() => {
+        hideTyping();
+        appendMsg('¡Qué buena noticia que te interese unirte al equipo! 🎉\nTe haré unas preguntas rápidas (menos de 5 minutos) para conocer tu perfil.', 'bot');
+        setTimeout(() => startRecruitment(), 800);
+      }, 600);
+      return;
+    }
+
+    // ── FAQ general ────────────────────────────────────────────
     appendMsg(msg, 'user');
     suggestionsEl.innerHTML = '';
     showTyping();
@@ -736,8 +805,8 @@ function initChatbot() {
         appendMsg(resp, 'bot');
         renderSuggestions(match.suggestions);
       } else {
-        appendMsg('No encontré una respuesta específica para su pregunta. Para atenderle mejor:\n\n📧 ' + cfg.emailInfo + '\n\nNuestros asesores responden en menos de 2 horas.', 'bot');
-        renderSuggestions(['¿Qué servicios ofrecen?','¿Cómo cotizo?','Contactar asesor']);
+        appendMsg('No encontré una respuesta específica. Para atenderle mejor:\n\n📧 ' + cfg.emailInfo + '\n\nNuestros asesores responden en menos de 2 horas.', 'bot');
+        renderSuggestions(['¿Qué servicios ofrecen?', '¿Cómo cotizo?', 'Contactar asesor']);
       }
     }, 600);
   }
@@ -747,12 +816,12 @@ function initChatbot() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
 
-  // Initial suggestions
+  // Sugerencias iniciales — incluye la opción de empleo de forma visible
   renderSuggestions([
     '¿Qué servicios ofrecen?',
+    '💼 Quiero postularme',
     '¿Cómo solicito una cotización?',
-    '¿Cuál es su zona de cobertura?',
-    '¿Trabajan con empresas?'
+    '¿Zona de cobertura?'
   ]);
 }
 

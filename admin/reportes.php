@@ -10,9 +10,34 @@ function fetchAll($result): array {
     return $rows;
 }
 
+// ── Permisos por pestaña ──────────────────────────────────────────────────
+// Cada tab de reportes requiere permiso al módulo que le corresponde.
+$TAB_MODULO = [
+    'headcount'  => 'empleados',
+    'asistencia' => 'asistencia',
+    'nomina'     => 'nomina',
+    'incidencias'=> 'vacaciones',
+];
+
+// Solo los tabs a los que el usuario tiene acceso
+$TABS_VISIBLES = array_filter(array_keys($TAB_MODULO), fn($t) => hasPermiso($TAB_MODULO[$t]));
+$TABS_VISIBLES = array_values($TABS_VISIBLES);
+
+if (empty($TABS_VISIBLES)) {
+    // Tiene permiso "reportes" pero ningún módulo asociado — no debería ocurrir
+    header('Location: index.php?forbidden=1');
+    exit;
+}
+
 // ── Filtros ───────────────────────────────────────────────────────────────
-$TABS   = ['headcount','asistencia','nomina','incidencias'];
-$tab    = in_array($_GET['tab'] ?? '', $TABS) ? $_GET['tab'] : 'headcount';
+$tab_req = $_GET['tab'] ?? '';
+// Si el tab solicitado no es visible para este usuario, usar el primero disponible
+if (!in_array($tab_req, $TABS_VISIBLES)) {
+    $tab = $TABS_VISIBLES[0];
+} else {
+    $tab = $tab_req;
+}
+
 $fi     = $_GET['fi']     ?? date('Y-m-01');
 $ff     = $_GET['ff']     ?? date('Y-m-t');
 $fi_s   = $db->real_escape_string($fi);
@@ -24,6 +49,13 @@ $edo_f  = $_GET['estado']  ?? '';
 // ── Exportar CSV ──────────────────────────────────────────────────────────
 if (isset($_GET['export'])) {
     $exp = $_GET['export'];
+
+    // Bloquear exports de tabs que el usuario no puede ver
+    $expModulo = $TAB_MODULO[$exp] ?? null;
+    if (!$expModulo || !hasPermiso($expModulo)) {
+        header('Location: reportes.php');
+        exit;
+    }
 
     if ($exp === 'headcount') {
         $rows = fetchAll($db->query(
@@ -132,90 +164,104 @@ if (isset($_GET['export'])) {
     }
 }
 
-// ── Headcount ─────────────────────────────────────────────────────────────
-$hc_depts = fetchAll($db->query(
-    "SELECT COALESCE(d.nombre,'Sin departamento') AS departamento,
-            COUNT(CASE WHEN e.estatus='activo' THEN 1 END) AS activos,
-            COUNT(CASE WHEN e.estatus IN('vacaciones','incapacidad','baja_temporal') THEN 1 END) AS con_incidencia,
-            COUNT(CASE WHEN e.estatus='baja_definitiva' THEN 1 END) AS bajas,
-            COUNT(*) AS total
-     FROM empleados e
-     LEFT JOIN departamentos d ON d.id = e.departamento_id
-     GROUP BY d.id, d.nombre
-     ORDER BY d.nombre"
-));
+// ── Headcount (solo si el usuario tiene acceso) ───────────────────────────
+$hc_depts = $hc_lista = [];
+$hc_activos = $hc_incid = $hc_bajas = $hc_total = 0;
+if (hasPermiso('empleados')) {
+    $hc_depts = fetchAll($db->query(
+        "SELECT COALESCE(d.nombre,'Sin departamento') AS departamento,
+                COUNT(CASE WHEN e.estatus='activo' THEN 1 END) AS activos,
+                COUNT(CASE WHEN e.estatus IN('vacaciones','incapacidad','baja_temporal') THEN 1 END) AS con_incidencia,
+                COUNT(CASE WHEN e.estatus='baja_definitiva' THEN 1 END) AS bajas,
+                COUNT(*) AS total
+         FROM empleados e
+         LEFT JOIN departamentos d ON d.id = e.departamento_id
+         GROUP BY d.id, d.nombre
+         ORDER BY d.nombre"
+    ));
+    $est_where = $est_f ? " AND e.estatus='".$db->real_escape_string($est_f)."'" : '';
+    $hc_lista = fetchAll($db->query(
+        "SELECT e.numero_empleado,
+                CONCAT(e.nombre,' ',e.apellido_paterno,' ',COALESCE(e.apellido_materno,'')) AS empleado,
+                COALESCE(d.nombre,'—') AS departamento,
+                COALESCE(p.nombre,'—') AS puesto,
+                e.tipo_contrato, e.fecha_ingreso, e.salario_base, e.estatus
+         FROM empleados e
+         LEFT JOIN departamentos d ON d.id = e.departamento_id
+         LEFT JOIN puestos p ON p.id = e.puesto_id
+         WHERE 1=1 $est_where
+         ORDER BY d.nombre, e.apellido_paterno"
+    ));
+    $hc_activos = array_sum(array_column($hc_depts, 'activos'));
+    $hc_incid   = array_sum(array_column($hc_depts, 'con_incidencia'));
+    $hc_bajas   = array_sum(array_column($hc_depts, 'bajas'));
+    $hc_total   = array_sum(array_column($hc_depts, 'total'));
+}
 
-$est_where = $est_f ? " AND e.estatus='".$db->real_escape_string($est_f)."'" : '';
-$hc_lista = fetchAll($db->query(
-    "SELECT e.numero_empleado,
-            CONCAT(e.nombre,' ',e.apellido_paterno,' ',COALESCE(e.apellido_materno,'')) AS empleado,
-            COALESCE(d.nombre,'—') AS departamento,
-            COALESCE(p.nombre,'—') AS puesto,
-            e.tipo_contrato, e.fecha_ingreso, e.salario_base, e.estatus
-     FROM empleados e
-     LEFT JOIN departamentos d ON d.id = e.departamento_id
-     LEFT JOIN puestos p ON p.id = e.puesto_id
-     WHERE 1=1 $est_where
-     ORDER BY d.nombre, e.apellido_paterno"
-));
-$hc_activos  = array_sum(array_column($hc_depts, 'activos'));
-$hc_incid    = array_sum(array_column($hc_depts, 'con_incidencia'));
-$hc_bajas    = array_sum(array_column($hc_depts, 'bajas'));
-$hc_total    = array_sum(array_column($hc_depts, 'total'));
+// ── Asistencia (solo si el usuario tiene acceso) ──────────────────────────
+$asis_rows = [];
+if (hasPermiso('asistencia')) {
+    $asis_rows = fetchAll($db->query(
+        "SELECT e.numero_empleado,
+                CONCAT(e.nombre,' ',e.apellido_paterno,' ',COALESCE(e.apellido_materno,'')) AS empleado,
+                COALESCE(d.nombre,'—') AS departamento,
+                COUNT(CASE WHEN a.tipo='normal' THEN 1 END) AS presentes,
+                COUNT(CASE WHEN a.tipo LIKE 'falta%' THEN 1 END) AS faltas,
+                COUNT(CASE WHEN a.tipo='vacaciones' THEN 1 END) AS vacaciones,
+                COUNT(CASE WHEN a.tipo='incapacidad' THEN 1 END) AS incapacidades,
+                COUNT(CASE WHEN a.retardo=1 THEN 1 END) AS retardos,
+                COALESCE(SUM(a.horas_extra),0) AS horas_extra
+         FROM empleados e
+         LEFT JOIN departamentos d ON d.id = e.departamento_id
+         LEFT JOIN asistencia a ON a.empleado_id=e.id AND a.fecha BETWEEN '$fi_s' AND '$ff_s'
+         WHERE e.estatus != 'baja_definitiva'
+         GROUP BY e.id, e.numero_empleado, e.nombre, e.apellido_paterno, e.apellido_materno, d.nombre
+         ORDER BY d.nombre, e.apellido_paterno"
+    ));
+}
 
-// ── Asistencia ────────────────────────────────────────────────────────────
-$asis_rows = fetchAll($db->query(
-    "SELECT e.numero_empleado,
-            CONCAT(e.nombre,' ',e.apellido_paterno,' ',COALESCE(e.apellido_materno,'')) AS empleado,
-            COALESCE(d.nombre,'—') AS departamento,
-            COUNT(CASE WHEN a.tipo='normal' THEN 1 END) AS presentes,
-            COUNT(CASE WHEN a.tipo LIKE 'falta%' THEN 1 END) AS faltas,
-            COUNT(CASE WHEN a.tipo='vacaciones' THEN 1 END) AS vacaciones,
-            COUNT(CASE WHEN a.tipo='incapacidad' THEN 1 END) AS incapacidades,
-            COUNT(CASE WHEN a.retardo=1 THEN 1 END) AS retardos,
-            COALESCE(SUM(a.horas_extra),0) AS horas_extra
-     FROM empleados e
-     LEFT JOIN departamentos d ON d.id = e.departamento_id
-     LEFT JOIN asistencia a ON a.empleado_id=e.id AND a.fecha BETWEEN '$fi_s' AND '$ff_s'
-     WHERE e.estatus != 'baja_definitiva'
-     GROUP BY e.id, e.numero_empleado, e.nombre, e.apellido_paterno, e.apellido_materno, d.nombre
-     ORDER BY d.nombre, e.apellido_paterno"
-));
+// ── Nómina (solo si el usuario tiene acceso) ──────────────────────────────
+$nom_rows = [];
+$nom_percepciones = $nom_deducciones = $nom_neto = 0;
+if (hasPermiso('nomina')) {
+    $nom_rows = fetchAll($db->query(
+        "SELECT id, tipo, fecha_inicio, fecha_fin, fecha_pago,
+                estado, empleados_count,
+                total_percepciones, total_deducciones, total_neto
+         FROM nomina_periodos
+         WHERE fecha_inicio BETWEEN '$fi_s' AND '$ff_s'
+         ORDER BY fecha_inicio DESC"
+    ));
+    $nom_percepciones = array_sum(array_column($nom_rows, 'total_percepciones'));
+    $nom_deducciones  = array_sum(array_column($nom_rows, 'total_deducciones'));
+    $nom_neto         = array_sum(array_column($nom_rows, 'total_neto'));
+}
 
-// ── Nómina ────────────────────────────────────────────────────────────────
-$nom_rows = fetchAll($db->query(
-    "SELECT id, tipo, fecha_inicio, fecha_fin, fecha_pago,
-            estado, empleados_count,
-            total_percepciones, total_deducciones, total_neto
-     FROM nomina_periodos
-     WHERE fecha_inicio BETWEEN '$fi_s' AND '$ff_s'
-     ORDER BY fecha_inicio DESC"
-));
-$nom_percepciones = array_sum(array_column($nom_rows, 'total_percepciones'));
-$nom_deducciones  = array_sum(array_column($nom_rows, 'total_deducciones'));
-$nom_neto         = array_sum(array_column($nom_rows, 'total_neto'));
-
-// ── Incidencias ───────────────────────────────────────────────────────────
-$inc_where = "i.fecha_inicio BETWEEN '$fi_s' AND '$ff_s'";
-if ($tipo_f) $inc_where .= " AND i.tipo='".$db->real_escape_string($tipo_f)."'";
-if ($edo_f)  $inc_where .= " AND i.estado='".$db->real_escape_string($edo_f)."'";
-$inc_rows = fetchAll($db->query(
-    "SELECT i.id,
-            CONCAT(e.nombre,' ',e.apellido_paterno) AS empleado,
-            e.numero_empleado,
-            COALESCE(d.nombre,'—') AS departamento,
-            i.tipo, i.fecha_inicio, i.fecha_fin, i.dias,
-            i.estado, COALESCE(i.descripcion,'') AS descripcion,
-            COALESCE(i.aprobado_por,'') AS aprobado_por
-     FROM incidencias i
-     JOIN empleados e ON e.id = i.empleado_id
-     LEFT JOIN departamentos d ON d.id = e.departamento_id
-     WHERE $inc_where
-     ORDER BY i.fecha_inicio DESC"
-));
-$inc_pend = count(array_filter($inc_rows, fn($r) => $r['estado'] === 'pendiente'));
-$inc_apro = count(array_filter($inc_rows, fn($r) => $r['estado'] === 'aprobada'));
-$inc_rech = count(array_filter($inc_rows, fn($r) => $r['estado'] === 'rechazada'));
+// ── Incidencias (solo si el usuario tiene acceso a vacaciones) ────────────
+$inc_rows = [];
+$inc_pend = $inc_apro = $inc_rech = 0;
+if (hasPermiso('vacaciones')) {
+    $inc_where = "i.fecha_inicio BETWEEN '$fi_s' AND '$ff_s'";
+    if ($tipo_f) $inc_where .= " AND i.tipo='".$db->real_escape_string($tipo_f)."'";
+    if ($edo_f)  $inc_where .= " AND i.estado='".$db->real_escape_string($edo_f)."'";
+    $inc_rows = fetchAll($db->query(
+        "SELECT i.id,
+                CONCAT(e.nombre,' ',e.apellido_paterno) AS empleado,
+                e.numero_empleado,
+                COALESCE(d.nombre,'—') AS departamento,
+                i.tipo, i.fecha_inicio, i.fecha_fin, i.dias,
+                i.estado, COALESCE(i.descripcion,'') AS descripcion,
+                COALESCE(i.aprobado_por,'') AS aprobado_por
+         FROM incidencias i
+         JOIN empleados e ON e.id = i.empleado_id
+         LEFT JOIN departamentos d ON d.id = e.departamento_id
+         WHERE $inc_where
+         ORDER BY i.fecha_inicio DESC"
+    ));
+    $inc_pend = count(array_filter($inc_rows, fn($r) => $r['estado'] === 'pendiente'));
+    $inc_apro = count(array_filter($inc_rows, fn($r) => $r['estado'] === 'aprobada'));
+    $inc_rech = count(array_filter($inc_rows, fn($r) => $r['estado'] === 'rechazada'));
+}
 
 // ── Helpers vista ─────────────────────────────────────────────────────────
 $TIPOS_INC = [
@@ -312,11 +358,19 @@ tr:hover td{background:#f8fafc}
 
 <div class="body">
 
-  <!-- Tabs -->
+  <!-- Tabs — solo muestra las que el usuario tiene permiso -->
+  <?php
+  $TAB_LABELS = [
+      'headcount'  => '👥 Empleados',
+      'asistencia' => '📅 Asistencia',
+      'nomina'     => '📋 Nómina',
+      'incidencias'=> '📋 Incidencias',
+  ];
+  ?>
   <div class="tabs">
-    <?php foreach (['headcount'=>'👥 Empleados','asistencia'=>'📅 Asistencia','nomina'=>'📋 Nómina','incidencias'=>'📋 Incidencias'] as $t=>$lbl): ?>
+    <?php foreach ($TABS_VISIBLES as $t): ?>
       <button class="tab-btn <?= $tab===$t?'active':'' ?>" onclick="location.href='?tab=<?= $t ?>&fi=<?= h($fi) ?>&ff=<?= h($ff) ?>'">
-        <?= $lbl ?>
+        <?= $TAB_LABELS[$t] ?>
       </button>
     <?php endforeach ?>
   </div>
