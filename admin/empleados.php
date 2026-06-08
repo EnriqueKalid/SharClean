@@ -390,8 +390,9 @@ textarea.vf-inp{resize:vertical;}
         <a href="empleados.php" class="btn-sm btn-muted">✕ Limpiar</a>
       <?php endif; ?>
     </form>
-    <div style="margin-left:auto;">
+    <div style="margin-left:auto;display:flex;gap:8px;">
       <?php if (!$showForm): ?>
+        <a href="empleados_importar.php" class="btn-sm btn-muted">📤 Importar CSV</a>
         <a href="empleados.php?form=1" class="btn-sm btn-primary">+ Nuevo empleado</a>
       <?php endif; ?>
     </div>
