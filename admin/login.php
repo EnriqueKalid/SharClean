@@ -25,7 +25,7 @@ function dbUsersExist(mysqli $db): bool
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = trim($_POST['user'] ?? '');
-    $pass = trim($_POST['pass'] ?? '');
+    $pass = $_POST['pass'] ?? '';
     $db   = getDB();
 
     if (dbUsersExist($db)) {

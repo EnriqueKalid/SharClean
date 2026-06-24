@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/auth.php';
 requirePermiso('usuarios');
+require_once __DIR__ . '/../db/mailer.php';
 $db = getAdminDB();
 
 function fetchAll($result): array {
@@ -27,7 +28,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $username = trim($_POST['username']  ?? '');
         $pass     = $_POST['pass']     ?? '';
         $perfil_id= (int)($_POST['perfil_id'] ?? 1);
-        $activo   = isset($_POST['activo']) ? 1 : 0;
+        // Si se edita la propia cuenta, activo viene disabled y no se envía en POST
+        // — preservar el valor actual en lugar de poner 0.
+        if ($uid > 0 && $uid === $me['id']) {
+            $cur = $db->query("SELECT activo FROM admin_usuarios WHERE id=$uid LIMIT 1")->fetch_assoc();
+            $activo = (int)($cur['activo'] ?? 1);
+        } else {
+            $activo = isset($_POST['activo']) ? 1 : 0;
+        }
 
         if (!$nombre || !$username) $errors[] = 'Nombre y usuario son obligatorios.';
         if (strlen($username) < 3)  $errors[] = 'El usuario debe tener al menos 3 caracteres.';
@@ -77,6 +85,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($act === 'delete_user' && $uid > 0 && $uid !== $me['id']) {
         $db->query("DELETE FROM admin_usuarios WHERE id=$uid");
         header('Location: usuarios.php?tab=usuarios'); exit;
+    }
+
+    if ($act === 'send_reset' && $uid > 0) {
+        $row = $db->query("SELECT id, nombre, email FROM admin_usuarios WHERE id=$uid LIMIT 1")->fetch_assoc();
+        if (!$row || !$row['email']) {
+            header('Location: usuarios.php?tab=usuarios&reset_err=1'); exit;
+        }
+        // Invalidar tokens anteriores
+        $db->query("UPDATE admin_reset_tokens SET used=1 WHERE user_id=$uid");
+        $token   = bin2hex(random_bytes(32));
+        $expires = date('Y-m-d H:i:s', time() + 3600);
+        $t = $db->real_escape_string($token);
+        $db->query("INSERT INTO admin_reset_tokens (user_id, token, expires_at) VALUES ($uid, '$t', '$expires')");
+
+        $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http')
+                 . '://' . $_SERVER['HTTP_HOST']
+                 . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
+        $link = $baseUrl . '/reset_password.php?token=' . urlencode($token);
+
+        $nombre = h($row['nombre']);
+        $html   = emailLayout('Restablecer contraseña', <<<HTML
+<h2 style="margin:0 0 16px;font-size:20px;">Restablecer contraseña</h2>
+<p>Hola <strong>$nombre</strong>,</p>
+<p>Recibiste este correo porque se solicitó restablecer la contraseña de tu cuenta en el sistema administrativo de Sharclean.</p>
+<p style="margin:24px 0;">
+  <a href="$link"
+     style="display:inline-block;background:#0284C7;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+    Restablecer contraseña
+  </a>
+</p>
+<p style="font-size:13px;color:#64748b;">El enlace expira en <strong>1 hora</strong>. Si no solicitaste este cambio, ignora este mensaje.</p>
+<p style="font-size:12px;color:#94a3b8;word-break:break-all;">Si el botón no funciona, copia este enlace en tu navegador:<br>$link</p>
+HTML);
+        $sent = sendMail($row['email'], 'Restablecer contraseña – Sharclean Admin', $html);
+        header('Location: usuarios.php?tab=usuarios&reset_ok=' . ($sent ? '1' : '0')); exit;
     }
 }
 
@@ -185,6 +228,16 @@ require __DIR__ . '/_nav.php';
 
   <?php if ($savedMsg): ?>
     <div class="alert alert-success">✓ Usuario guardado correctamente.</div>
+  <?php endif ?>
+  <?php if (isset($_GET['reset_ok'])): ?>
+    <?php if ($_GET['reset_ok'] === '1'): ?>
+      <div class="alert alert-success">✓ Correo de reseteo enviado correctamente.</div>
+    <?php else: ?>
+      <div class="alert alert-error">✗ No se pudo enviar el correo. Verifica la configuración SMTP.</div>
+    <?php endif ?>
+  <?php endif ?>
+  <?php if (isset($_GET['reset_err'])): ?>
+    <div class="alert alert-error">✗ Este usuario no tiene email registrado. Agrégalo primero.</div>
   <?php endif ?>
   <?php foreach ($errors as $err): ?>
     <div class="alert alert-error">✗ <?= h($err) ?></div>
@@ -295,6 +348,13 @@ require __DIR__ . '/_nav.php';
           <td>
             <div class="btn-grp">
               <a href="?tab=usuarios&edit=<?= $u['id'] ?>" class="btn btn-outline btn-sm">Editar</a>
+              <?php if ($u['email']): ?>
+              <form method="post" style="display:inline" onsubmit="return confirm('¿Enviar correo de reseteo de contraseña a <?= h($u['email']) ?>?')">
+                <input type="hidden" name="action" value="send_reset">
+                <input type="hidden" name="uid" value="<?= $u['id'] ?>">
+                <button type="submit" class="btn btn-outline btn-sm" title="Enviar enlace de reseteo por correo">🔑 Resetear</button>
+              </form>
+              <?php endif ?>
               <?php if (!$isMe): ?>
               <form method="post" style="display:inline" onsubmit="return confirm('<?= $u['activo'] ? '¿Desactivar este usuario?' : '¿Activar este usuario?' ?>')">
                 <input type="hidden" name="action" value="toggle_activo">

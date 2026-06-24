@@ -75,6 +75,7 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 6. `db/migrate_config_v1.sql` ✅
 7. `db/migrate_chatbot_v1.sql` ✅
 8. `db/migrate_usuarios_v1.sql` ✅
+9. `db/migrate_reset_tokens_v1.sql` ✅
 
 ## Estado de módulos RRHH
 
