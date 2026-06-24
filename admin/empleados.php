@@ -75,8 +75,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ciudad        = trim($_POST['ciudad']            ?? '') ?: 'CDMX';
         $edo_res       = trim($_POST['estado_residencia'] ?? '') ?: null;
         $cp            = trim($_POST['cp']                ?? '') ?: null;
-        $dept_id       = (int)($_POST['departamento_id']  ?? 0) ?: null;
         $puesto_id     = (int)($_POST['puesto_id']        ?? 0) ?: null;
+        $dept_id       = (int)($_POST['departamento_id']  ?? 0) ?: null;
+        /* Si eligió puesto pero no departamento, resolverlo desde el catálogo */
+        if ($puesto_id && !$dept_id) {
+            $rp = $db->prepare('SELECT departamento_id FROM puestos WHERE id=? LIMIT 1');
+            $rp->bind_param('i', $puesto_id);
+            $rp->execute();
+            $rp->bind_result($dept_id);
+            $rp->fetch();
+            $rp->close();
+        }
         $puesto_nom    = trim($_POST['puesto_nombre']     ?? '') ?: null;
         $tipo_contrato = in_array($_POST['tipo_contrato'] ?? '', ['indeterminado','determinado','por_obra','confianza','honorarios'])
                          ? $_POST['tipo_contrato'] : 'indeterminado';
@@ -183,9 +192,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $su->execute();
         }
     } elseif ($act === 'del_empleado' && $id > 0) {
-        $su = $db->prepare('DELETE FROM empleados WHERE id=?');
-        $su->bind_param('i', $id);
-        $su->execute();
+        $chk = $db->prepare('SELECT estatus FROM empleados WHERE id=?');
+        $chk->bind_param('i', $id);
+        $chk->execute();
+        $chk->bind_result($estatus_actual);
+        $chk->fetch();
+        $chk->close();
+        if ($estatus_actual === 'baja_definitiva') {
+            $su = $db->prepare('DELETE FROM empleados WHERE id=?');
+            $su->bind_param('i', $id);
+            $su->execute();
+        }
     }
 
     $db->close();
@@ -700,7 +717,8 @@ textarea.vf-inp{resize:vertical;}
                   <?= $e['estatus']==='baja_definitiva' ? '▶ Reactivar' : '⏹ Dar baja' ?>
                 </button>
               </form>
-              <!-- Eliminar -->
+              <!-- Eliminar (solo si ya está en baja definitiva) -->
+              <?php if ($e['estatus'] === 'baja_definitiva'): ?>
               <form method="post" style="display:inline;margin-left:3px;">
                 <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
                 <input type="hidden" name="action" value="del_empleado">
@@ -710,6 +728,9 @@ textarea.vf-inp{resize:vertical;}
                   🗑
                 </button>
               </form>
+              <?php else: ?>
+              <span title="Dar de baja al empleado antes de eliminar" style="display:inline-block;margin-left:3px;opacity:.35;cursor:not-allowed;font-size:1rem;">🗑</span>
+              <?php endif; ?>
             </td>
           </tr>
         <?php endforeach; ?>
@@ -722,11 +743,11 @@ textarea.vf-inp{resize:vertical;}
 </div><!-- /body -->
 
 <script>
-/* Filtrar puestos por departamento seleccionado */
 (function() {
-  const deptSel  = document.getElementById('sel-dept');
+  const deptSel   = document.getElementById('sel-dept');
   const puestoSel = document.getElementById('sel-puesto');
   if (!deptSel || !puestoSel) return;
+
   function filterPuestos() {
     const deptId = deptSel.value;
     Array.from(puestoSel.options).forEach(function(opt) {
@@ -734,6 +755,16 @@ textarea.vf-inp{resize:vertical;}
       opt.hidden = deptId && opt.dataset.dept !== deptId;
     });
   }
+
+  /* Al elegir puesto → auto-asignar su departamento */
+  puestoSel.addEventListener('change', function() {
+    const selected = puestoSel.options[puestoSel.selectedIndex];
+    if (selected && selected.dataset.dept) {
+      deptSel.value = selected.dataset.dept;
+      filterPuestos();
+    }
+  });
+
   deptSel.addEventListener('change', filterPuestos);
   filterPuestos();
 })();

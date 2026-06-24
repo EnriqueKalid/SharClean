@@ -92,8 +92,13 @@ if (($_GET['plantilla'] ?? '') === '1') {
 }
 
 /* ── Catálogos para validar departamento_id / puesto_id ───── */
-$deptIds   = array_map('intval', array_column(fetchAll($db->query('SELECT id FROM departamentos')), 'id'));
-$puestoIds = array_map('intval', array_column(fetchAll($db->query('SELECT id FROM puestos')), 'id'));
+$deptIds    = array_map('intval', array_column(fetchAll($db->query('SELECT id FROM departamentos')), 'id'));
+/* puesto_id => departamento_id (para auto-asignar depto si el CSV lo omite) */
+$puestoMap  = [];
+foreach (fetchAll($db->query('SELECT id, departamento_id FROM puestos')) as $p) {
+    $puestoMap[(int)$p['id']] = (int)$p['departamento_id'];
+}
+$puestoIds = array_keys($puestoMap);
 
 $resultado = null; // ['importados'=>int,'omitidos'=>[...],'errores'=>[...]] o ['error'=>string]
 
@@ -221,6 +226,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
                     if ($puesto_raw !== '') {
                         if (ctype_digit($puesto_raw) && in_array((int)$puesto_raw, $puestoIds, true)) $puesto_id = (int)$puesto_raw;
                         else $rowErrors[] = "puesto_id '$puesto_raw' no existe en el catálogo de puestos";
+                    }
+
+                    /* Si tiene puesto pero no departamento, resolverlo desde el catálogo */
+                    if ($puesto_id !== null && $dept_id === null) {
+                        $dept_id = $puestoMap[$puesto_id] ?? null;
                     }
 
                     $puesto_nom = $get($cols, $idx, 'puesto_nombre') ?: null;
