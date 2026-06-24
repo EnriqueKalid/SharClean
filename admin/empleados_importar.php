@@ -32,12 +32,12 @@ const TIPOS_CONTRATO   = ['indeterminado','determinado','por_obra','confianza','
 const PERIODOS_PAGO    = ['semanal','quincenal','mensual'];
 const ESTATUSES        = ['activo','vacaciones','incapacidad','baja_temporal','baja_definitiva'];
 
-/** Acepta fechas en formato Y-m-d o d/m/Y. Devuelve: '' si vacío, false si formato inválido, o 'Y-m-d' si válida. */
+/** Acepta fechas en formato Y-m-d, d/m/Y o n/j/Y (M/D/AAAA estilo US). Devuelve: '' si vacío, false si formato inválido, o 'Y-m-d' si válida. */
 function parseFechaCsv(string $s)
 {
     $s = trim($s);
     if ($s === '') return '';
-    foreach (['Y-m-d', 'd/m/Y'] as $fmt) {
+    foreach (['Y-m-d', 'd/m/Y', 'n/j/Y'] as $fmt) {
         $d = DateTime::createFromFormat('!' . $fmt, $s);
         if ($d && $d->format($fmt) === $s) return $d->format('Y-m-d');
     }
@@ -188,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
                         else $rowErrors[] = "sexo '$sexo_raw' inválido (use M, F o NB)";
                     }
 
-                    $edo_civil_raw = $get($cols, $idx, 'estado_civil');
+                    $edo_civil_raw = strtolower($get($cols, $idx, 'estado_civil'));
                     $edo_civil = null;
                     if ($edo_civil_raw !== '') {
                         if (in_array($edo_civil_raw, ESTADOS_CIVILES, true)) $edo_civil = $edo_civil_raw;
