@@ -72,19 +72,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($act === 'save_vacante') {
         $titulo    = trim($_POST['titulo']    ?? '');
-        $area      = trim($_POST['area']      ?? 'Operaciones');
-        $tipo      = trim($_POST['tipo']      ?? 'Tiempo completo');
+        $area      = trim($_POST['area']      ?? 'Limpieza');
+        $tipo      = trim($_POST['tipo']      ?? 'Matutino');
         $desc      = trim($_POST['descripcion'] ?? '');
         $req       = trim($_POST['requisitos'] ?? '');
         $ubicacion = trim($_POST['ubicacion'] ?? 'CDMX / EDOMEX');
+        $maps_url  = trim($_POST['maps_url']  ?? '');
         $activa    = isset($_POST['activa']) ? 1 : 0;
         if ($titulo !== '') {
             if ($id > 0) {
-                $s = $db->prepare('UPDATE vacantes SET titulo=?,area=?,tipo=?,descripcion=?,requisitos=?,ubicacion=?,activa=? WHERE id=?');
-                $s->bind_param('ssssssii', $titulo,$area,$tipo,$desc,$req,$ubicacion,$activa,$id);
+                $s = $db->prepare('UPDATE vacantes SET titulo=?,area=?,tipo=?,descripcion=?,requisitos=?,ubicacion=?,maps_url=?,activa=? WHERE id=?');
+                $s->bind_param('sssssssii', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$activa,$id);
             } else {
-                $s = $db->prepare('INSERT INTO vacantes (titulo,area,tipo,descripcion,requisitos,ubicacion,activa) VALUES (?,?,?,?,?,?,?)');
-                $s->bind_param('ssssssi', $titulo,$area,$tipo,$desc,$req,$ubicacion,$activa);
+                $s = $db->prepare('INSERT INTO vacantes (titulo,area,tipo,descripcion,requisitos,ubicacion,maps_url,activa) VALUES (?,?,?,?,?,?,?,?)');
+                $s->bind_param('sssssssi', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$activa);
             }
             $s->execute();
         }
@@ -556,26 +557,39 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
                      placeholder="Ej. Afanador / Auxiliar de Limpieza">
             </div>
             <div class="vf-field">
+              <label>Servicio</label>
+              <input type="text" name="area"
+                     value="<?= h($editVacante['area'] ?? 'Limpieza') ?>"
+                     placeholder="Ej. Limpieza, Mantenimiento…">
+            </div>
+            <!-- área como select oculto — se habilitará desde configuración en futuras versiones -->
+            <div class="vf-field" style="display:none;">
               <label>Área</label>
-              <select name="area">
+              <select name="_area_legacy" disabled>
                 <?php foreach (['Operaciones','Limpieza','Mantenimiento','Administración'] as $opt): ?>
-                  <option value="<?= $opt ?>" <?= ($editVacante['area'] ?? 'Operaciones') === $opt ? 'selected' : '' ?>><?= $opt ?></option>
+                  <option value="<?= $opt ?>"><?= $opt ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
             <div class="vf-field">
-              <label>Tipo de empleo</label>
+              <label>Horario</label>
               <select name="tipo">
-                <?php foreach (['Tiempo completo','Medio tiempo','Por proyecto','Temporal'] as $opt): ?>
-                  <option value="<?= $opt ?>" <?= ($editVacante['tipo'] ?? 'Tiempo completo') === $opt ? 'selected' : '' ?>><?= $opt ?></option>
+                <?php foreach (['Matutino','Vespertino','Nocturno','Mixto'] as $opt): ?>
+                  <option value="<?= $opt ?>" <?= ($editVacante['tipo'] ?? 'Matutino') === $opt ? 'selected' : '' ?>><?= $opt ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
-            <div class="vf-field vf-span2">
+            <div class="vf-field">
               <label>Ubicación</label>
               <input type="text" name="ubicacion"
                      value="<?= h($editVacante['ubicacion'] ?? 'CDMX / EDOMEX') ?>"
                      placeholder="CDMX / EDOMEX">
+            </div>
+            <div class="vf-field">
+              <label>Link Google Maps <span style="font-weight:400;color:#94a3b8;">(opcional)</span></label>
+              <input type="url" name="maps_url"
+                     value="<?= h($editVacante['maps_url'] ?? '') ?>"
+                     placeholder="https://maps.app.goo.gl/...">
             </div>
             <div class="vf-field vf-span2">
               <label>Descripción del puesto</label>
@@ -628,8 +642,8 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
           <thead><tr>
             <th>#</th>
             <th>Título</th>
-            <th>Área</th>
-            <th>Tipo</th>
+            <th>Servicio</th>
+            <th>Horario</th>
             <th>Ubicación</th>
             <th>Estado</th>
             <th>Creada</th>
@@ -650,7 +664,13 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
               </td>
               <td><?= h($r['area']) ?></td>
               <td style="color:#64748b;font-size:12px;"><?= h($r['tipo']) ?></td>
-              <td style="color:#64748b;font-size:12px;"><?= h($r['ubicacion'] ?: '—') ?></td>
+              <td style="color:#64748b;font-size:12px;">
+                <?= h($r['ubicacion'] ?: '—') ?>
+                <?php if (!empty($r['maps_url'])): ?>
+                  <a href="<?= h($r['maps_url']) ?>" target="_blank" rel="noopener"
+                     title="Ver en Google Maps" style="margin-left:4px;text-decoration:none;">📍</a>
+                <?php endif; ?>
+              </td>
               <td><?= vbadge((int)$r['activa']) ?></td>
               <td style="white-space:nowrap;color:#64748b;font-size:12px;"><?= fdate($r['fecha_creacion']) ?></td>
               <td style="white-space:nowrap;">
