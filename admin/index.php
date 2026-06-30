@@ -78,14 +78,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $req       = trim($_POST['requisitos'] ?? '');
         $ubicacion = trim($_POST['ubicacion'] ?? 'CDMX / EDOMEX');
         $maps_url  = trim($_POST['maps_url']  ?? '');
+        $rango_sal = trim($_POST['rango_salarial'] ?? '');
+        $beneficios = trim($_POST['beneficios'] ?? '');
         $activa    = isset($_POST['activa']) ? 1 : 0;
         if ($titulo !== '') {
             if ($id > 0) {
-                $s = $db->prepare('UPDATE vacantes SET titulo=?,area=?,tipo=?,descripcion=?,requisitos=?,ubicacion=?,maps_url=?,activa=? WHERE id=?');
-                $s->bind_param('sssssssii', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$activa,$id);
+                $s = $db->prepare('UPDATE vacantes SET titulo=?,area=?,tipo=?,descripcion=?,requisitos=?,ubicacion=?,maps_url=?,rango_salarial=?,beneficios=?,activa=? WHERE id=?');
+                $s->bind_param('sssssssssii', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$rango_sal,$beneficios,$activa,$id);
             } else {
-                $s = $db->prepare('INSERT INTO vacantes (titulo,area,tipo,descripcion,requisitos,ubicacion,maps_url,activa) VALUES (?,?,?,?,?,?,?,?)');
-                $s->bind_param('sssssssi', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$activa);
+                $s = $db->prepare('INSERT INTO vacantes (titulo,area,tipo,descripcion,requisitos,ubicacion,maps_url,rango_salarial,beneficios,activa) VALUES (?,?,?,?,?,?,?,?,?,?)');
+                $s->bind_param('sssssssssi', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$rango_sal,$beneficios,$activa);
             }
             $s->execute();
         }
@@ -580,7 +582,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
               </select>
             </div>
             <div class="vf-field">
-              <label>Ubicación</label>
+              <label>Área de Trabajo</label>
               <input type="text" name="ubicacion"
                      value="<?= h($editVacante['ubicacion'] ?? 'CDMX / EDOMEX') ?>"
                      placeholder="CDMX / EDOMEX">
@@ -590,6 +592,17 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
               <input type="url" name="maps_url"
                      value="<?= h($editVacante['maps_url'] ?? '') ?>"
                      placeholder="https://maps.app.goo.gl/...">
+            </div>
+            <div class="vf-field">
+              <label>Rango salarial <span style="font-weight:400;color:#94a3b8;">(opcional)</span></label>
+              <input type="text" name="rango_salarial"
+                     value="<?= h($editVacante['rango_salarial'] ?? '') ?>"
+                     placeholder="Ej. $7,000 - $9,000 mensuales">
+            </div>
+            <div class="vf-field vf-span2">
+              <label>Beneficios <span style="font-weight:400;color:#94a3b8;">(opcional)</span></label>
+              <textarea name="beneficios" rows="3"
+                        placeholder="Ej. Prestaciones de ley, vales de despensa, uniformes, capacitación…"><?= h($editVacante['beneficios'] ?? '') ?></textarea>
             </div>
             <div class="vf-field vf-span2">
               <label>Descripción del puesto</label>
@@ -644,7 +657,8 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
             <th>Título</th>
             <th>Servicio</th>
             <th>Horario</th>
-            <th>Ubicación</th>
+            <th>Área de Trabajo</th>
+            <th>Rango salarial</th>
             <th>Estado</th>
             <th>Creada</th>
             <th>Acciones</th>
@@ -671,6 +685,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
                      title="Ver en Google Maps" style="margin-left:4px;text-decoration:none;">📍</a>
                 <?php endif; ?>
               </td>
+              <td style="color:#64748b;font-size:12px;"><?= h($r['rango_salarial'] ?: '—') ?></td>
               <td><?= vbadge((int)$r['activa']) ?></td>
               <td style="white-space:nowrap;color:#64748b;font-size:12px;"><?= fdate($r['fecha_creacion']) ?></td>
               <td style="white-space:nowrap;">
