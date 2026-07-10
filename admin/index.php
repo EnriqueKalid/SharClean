@@ -78,16 +78,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $req       = trim($_POST['requisitos'] ?? '');
         $ubicacion = trim($_POST['ubicacion'] ?? 'CDMX / EDOMEX');
         $maps_url  = trim($_POST['maps_url']  ?? '');
-        $rango_sal = trim($_POST['rango_salarial'] ?? '');
+        $form_url  = trim($_POST['form_url']  ?? '');
+        $sal_min   = trim($_POST['rango_salarial_min'] ?? '');
+        $sal_max   = trim($_POST['rango_salarial_max'] ?? '');
+        $sal_min   = ($sal_min !== '' && ctype_digit($sal_min)) ? (int) $sal_min : null;
+        $sal_max   = ($sal_max !== '' && ctype_digit($sal_max)) ? (int) $sal_max : null;
+        if ($sal_min !== null && $sal_max !== null) {
+            $rango_sal = '$' . number_format($sal_min) . ' - $' . number_format($sal_max);
+        } elseif ($sal_min !== null) {
+            $rango_sal = 'Desde $' . number_format($sal_min);
+        } elseif ($sal_max !== null) {
+            $rango_sal = 'Hasta $' . number_format($sal_max);
+        } else {
+            $rango_sal = '';
+        }
         $beneficios = trim($_POST['beneficios'] ?? '');
         $activa    = isset($_POST['activa']) ? 1 : 0;
-        if ($titulo !== '') {
+        if ($titulo !== '' && $form_url !== '') {
             if ($id > 0) {
-                $s = $db->prepare('UPDATE vacantes SET titulo=?,area=?,tipo=?,descripcion=?,requisitos=?,ubicacion=?,maps_url=?,rango_salarial=?,beneficios=?,activa=? WHERE id=?');
-                $s->bind_param('sssssssssii', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$rango_sal,$beneficios,$activa,$id);
+                $s = $db->prepare('UPDATE vacantes SET titulo=?,area=?,tipo=?,descripcion=?,requisitos=?,ubicacion=?,maps_url=?,form_url=?,rango_salarial=?,beneficios=?,activa=? WHERE id=?');
+                $s->bind_param('ssssssssssii', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$form_url,$rango_sal,$beneficios,$activa,$id);
             } else {
-                $s = $db->prepare('INSERT INTO vacantes (titulo,area,tipo,descripcion,requisitos,ubicacion,maps_url,rango_salarial,beneficios,activa) VALUES (?,?,?,?,?,?,?,?,?,?)');
-                $s->bind_param('sssssssssi', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$rango_sal,$beneficios,$activa);
+                $s = $db->prepare('INSERT INTO vacantes (titulo,area,tipo,descripcion,requisitos,ubicacion,maps_url,form_url,rango_salarial,beneficios,activa) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+                $s->bind_param('ssssssssssi', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$form_url,$rango_sal,$beneficios,$activa);
             }
             $s->execute();
         }
@@ -157,10 +170,18 @@ if ($tab === 'aplicaciones' && ($f_estado || $f_canal)) {
 
 /* Vacante a editar (si aplica) */
 $editVacante = null;
+$editSalMin = '';
+$editSalMax = '';
 if ($tab === 'vacantes' && isset($_GET['edit'])) {
     $eid = (int)$_GET['edit'];
     $res = $db->query("SELECT * FROM vacantes WHERE id=$eid LIMIT 1");
     if ($res) $editVacante = $res->fetch_assoc();
+    if ($editVacante) {
+        preg_match_all('/[\d,]+/', $editVacante['rango_salarial'] ?? '', $salNums);
+        $salNums   = array_map(fn($n) => (int) str_replace(',', '', $n), $salNums[0] ?? []);
+        $editSalMin = $salNums[0] ?? '';
+        $editSalMax = $salNums[1] ?? '';
+    }
 }
 
 /* Vacantes activas para el selector del formulario de candidatos */
@@ -593,11 +614,23 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
                      value="<?= h($editVacante['maps_url'] ?? '') ?>"
                      placeholder="https://maps.app.goo.gl/...">
             </div>
+            <div class="vf-field vf-span2">
+              <label>Formulario de postulación (Google Forms) *</label>
+              <input type="url" name="form_url" required
+                     value="<?= h($editVacante['form_url'] ?? '') ?>"
+                     placeholder="https://forms.gle/...">
+            </div>
             <div class="vf-field">
-              <label>Rango salarial <span style="font-weight:400;color:#94a3b8;">(opcional)</span></label>
-              <input type="text" name="rango_salarial"
-                     value="<?= h($editVacante['rango_salarial'] ?? '') ?>"
-                     placeholder="Ej. $7,000 - $9,000 mensuales">
+              <label>Salario mínimo <span style="font-weight:400;color:#94a3b8;">(opcional)</span></label>
+              <input type="number" name="rango_salarial_min" min="0" step="1" inputmode="numeric"
+                     value="<?= h((string)$editSalMin) ?>"
+                     placeholder="Ej. 7000">
+            </div>
+            <div class="vf-field">
+              <label>Salario máximo <span style="font-weight:400;color:#94a3b8;">(opcional)</span></label>
+              <input type="number" name="rango_salarial_max" min="0" step="1" inputmode="numeric"
+                     value="<?= h((string)$editSalMax) ?>"
+                     placeholder="Ej. 9000">
             </div>
             <div class="vf-field vf-span2">
               <label>Beneficios <span style="font-weight:400;color:#94a3b8;">(opcional)</span></label>
@@ -659,6 +692,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
             <th>Horario</th>
             <th>Área de Trabajo</th>
             <th>Rango salarial</th>
+            <th>Formulario</th>
             <th>Estado</th>
             <th>Creada</th>
             <th>Acciones</th>
@@ -686,6 +720,14 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
                 <?php endif; ?>
               </td>
               <td style="color:#64748b;font-size:12px;"><?= h($r['rango_salarial'] ?: '—') ?></td>
+              <td style="font-size:12px;">
+                <?php if (!empty($r['form_url'])): ?>
+                  <a href="<?= h($r['form_url']) ?>" target="_blank" rel="noopener"
+                     style="color:#0284C7;text-decoration:none;" title="Abrir formulario">📋 Ver</a>
+                <?php else: ?>
+                  <span style="color:#ef4444;">Sin URL</span>
+                <?php endif; ?>
+              </td>
               <td><?= vbadge((int)$r['activa']) ?></td>
               <td style="white-space:nowrap;color:#64748b;font-size:12px;"><?= fdate($r['fecha_creacion']) ?></td>
               <td style="white-space:nowrap;">

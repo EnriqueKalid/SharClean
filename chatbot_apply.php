@@ -43,11 +43,9 @@ $edad          = (int) ($_POST['edad'] ?? 0);
 $experiencia   = trim(htmlspecialchars(strip_tags($_POST['experiencia']   ?? '')));
 $traslado      = trim(htmlspecialchars(strip_tags($_POST['traslado']      ?? '')));
 $salud_raw     = trim($_POST['salud']        ?? '');
-$dep_raw       = trim($_POST['dependientes'] ?? '');
 $disponibilidad= trim(htmlspecialchars(strip_tags($_POST['disponibilidad'] ?? '')));
 
 $condicion_salud = ($salud_raw === 'Sí') ? 1 : 0;
-$dependientes    = ($dep_raw   === 'Sí') ? 1 : 0;
 
 /* ── Validación mínima ─────────────────────────────────────── */
 if (empty($nombre) || empty($telefono)) {
@@ -63,14 +61,14 @@ try {
     $db   = getDB();
     $stmt = $db->prepare(
         "INSERT INTO chatbot_candidatos
-         (nombre, telefono, estado, edad, experiencia, traslado, condicion_salud, dependientes, disponibilidad, ip_address)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+         (nombre, telefono, estado, edad, experiencia, traslado, condicion_salud, disponibilidad, ip_address)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
     $stmt->bind_param(
-        'sssissiiss',
+        'sssississ',
         $nombre, $telefono, $estado, $edad,
         $experiencia, $traslado,
-        $condicion_salud, $dependientes,
+        $condicion_salud,
         $disponibilidad, $ip
     );
     $stmt->execute();
@@ -84,10 +82,9 @@ try {
 require_once __DIR__ . '/db/app_config.php';
 require_once __DIR__ . '/db/mailer.php';
 $cfgEmpresa   = appConfig('empresa_nombre',     'Sharclean');
-$cfgEmailInfo = appConfig('empresa_email_info', 'informacion@sharclean.com.mx');
+$cfgEmailInfo = appConfig('empresa_email_reclutamiento', 'reclutamiento@sharclean.com.mx');
 
 $salud_txt = $condicion_salud ? 'Sí' : 'No';
-$dep_txt   = $dependientes    ? 'Sí' : 'No';
 $edad_txt  = $edad > 0        ? "$edad años" : '—';
 
 $html = emailLayout("Nuevo candidato vía Chatbot – $nombre", "
@@ -113,20 +110,12 @@ $html = emailLayout("Nuevo candidato vía Chatbot – $nombre", "
     <td style='padding:8px 12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;'>Experiencia en limpieza</td>
     <td style='padding:8px 12px;border-bottom:1px solid #e2e8f0;'>" . htmlspecialchars($experiencia, ENT_QUOTES, 'UTF-8') . "</td>
   </tr>
-  <tr>
-    <td style='padding:8px 12px;font-weight:600;color:#475569;background:#f8fafc;border-bottom:1px solid #e2e8f0;'>Tiempo de traslado</td>
-    <td style='padding:8px 12px;border-bottom:1px solid #e2e8f0;'>" . htmlspecialchars($traslado, ENT_QUOTES, 'UTF-8') . "</td>
-  </tr>
   <tr style='background:#f8fafc;'>
     <td style='padding:8px 12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;'>Condición de salud</td>
     <td style='padding:8px 12px;border-bottom:1px solid #e2e8f0;'>$salud_txt</td>
   </tr>
   <tr>
-    <td style='padding:8px 12px;font-weight:600;color:#475569;background:#f8fafc;border-bottom:1px solid #e2e8f0;'>Dependientes económicos</td>
-    <td style='padding:8px 12px;border-bottom:1px solid #e2e8f0;'>$dep_txt</td>
-  </tr>
-  <tr style='background:#f8fafc;'>
-    <td style='padding:8px 12px;font-weight:600;color:#475569;'>Disponibilidad</td>
+    <td style='padding:8px 12px;font-weight:600;color:#475569;background:#f8fafc;'>Disponibilidad</td>
     <td style='padding:8px 12px;'>" . htmlspecialchars($disponibilidad, ENT_QUOTES, 'UTF-8') . "</td>
   </tr>
 </table>
