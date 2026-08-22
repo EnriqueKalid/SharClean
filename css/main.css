@@ -1213,7 +1213,7 @@ h1,h2,h3,h4,h5,h6 { line-height: 1.2; font-weight: 700; }
 }
 .vacante-card__meta-item svg { width: 15px; height: 15px; color: var(--primary); }
 .vacante-card__reqs { font-size: var(--font-size-sm); color: var(--gray); line-height: 1.65; }
-.vacante-card__footer { margin-top: 0.5rem; }
+.vacante-card__footer { margin-top: 0.5rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; }
 
 .apply-form-section { background: var(--gradient-section); }
 .apply-form {
