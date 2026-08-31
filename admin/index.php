@@ -40,6 +40,13 @@ function fetchAll($result): array {
     if ($result) while ($row = $result->fetch_assoc()) $rows[] = $row;
     return $rows;
 }
+function publicSiteUrl(string $path): string {
+    $scheme   = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host     = $_SERVER['HTTP_HOST'] ?? 'sharclean.com.mx';
+    $adminDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/admin/index.php'));
+    $siteRoot = rtrim(preg_replace('#/admin$#', '', $adminDir), '/');
+    return $scheme . '://' . $host . $siteRoot . '/' . ltrim($path, '/');
+}
 
 /* ── Handle POST actions ──────────────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -73,7 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($act === 'save_vacante') {
         $titulo    = trim($_POST['titulo']    ?? '');
         $area      = trim($_POST['area']      ?? 'Limpieza');
-        $tipo      = trim($_POST['tipo']      ?? 'Matutino');
+        $tipo      = implode(',', array_filter(array_map('trim', (array)($_POST['tipo'] ?? []))));
+        if ($tipo === '') $tipo = 'Matutino';
         $desc      = trim($_POST['descripcion'] ?? '');
         $req       = trim($_POST['requisitos'] ?? '');
         $ubicacion = trim($_POST['ubicacion'] ?? 'CDMX / EDOMEX');
@@ -266,6 +274,29 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
 .vf-check label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:#374151;cursor:pointer;margin:0;}
 .vf-actions{display:flex;gap:10px;margin-top:16px;align-items:center;}
 .vf-actions .btn-sm{text-decoration:none;display:inline-block;}
+.msel{position:relative;}
+.msel-control{display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:13px;background:#fff;cursor:pointer;user-select:none;}
+.msel-control:focus{outline:none;border-color:#0284C7;}
+.msel.open .msel-control{border-color:#0284C7;}
+.msel-text{color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.msel-text.placeholder{color:#94a3b8;}
+.msel-arrow{color:#94a3b8;font-size:11px;transition:transform .15s;flex-shrink:0;}
+.msel.open .msel-arrow{transform:rotate(180deg);}
+.msel-menu{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid #e2e8f0;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);padding:6px;z-index:20;}
+.msel.open .msel-menu{display:block;}
+.msel-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;font-size:13px;font-weight:400;color:#374151;cursor:pointer;}
+.msel-opt:hover{background:#f1f5f9;}
+.link-menu{display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1.5px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.12);padding:10px;z-index:30;width:320px;}
+.link-menu-wrap.open .link-menu{display:block;}
+.link-menu__item{margin-bottom:10px;}
+.link-menu__item:last-child{margin-bottom:0;}
+.link-menu__item label{display:block;font-size:11px;font-weight:600;color:#64748b;margin-bottom:4px;}
+.link-menu__row{display:flex;gap:6px;}
+.link-menu__row input{flex:1;min-width:0;padding:6px 8px;border:1.5px solid #e2e8f0;border-radius:5px;font-size:11px;color:#334155;background:#f8fafc;}
+.link-menu__row button{flex-shrink:0;padding:6px 10px;border:1.5px solid #0284C7;border-radius:5px;font-size:11px;font-weight:600;color:#0284C7;background:#fff;cursor:pointer;}
+.link-menu__row button:hover{background:#0284C7;color:#fff;}
+.acciones-row{display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+.acciones-row .btn-sm{padding:4px 7px;font-size:11px;white-space:nowrap;}
 @media(max-width:640px){.stats{grid-template-columns:repeat(2,1fr);}.vf-grid{grid-template-columns:1fr;}.vf-span2,.vf-check{grid-column:1;}}
 .btn-success{background:#dcfce7;color:#166534;}
 .btn-success:hover{background:#bbf7d0;}
@@ -596,11 +627,26 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
             </div>
             <div class="vf-field">
               <label>Horario</label>
-              <select name="tipo">
-                <?php foreach (['Matutino','Vespertino','Nocturno','Mixto'] as $opt): ?>
-                  <option value="<?= $opt ?>" <?= ($editVacante['tipo'] ?? 'Matutino') === $opt ? 'selected' : '' ?>><?= $opt ?></option>
-                <?php endforeach; ?>
-              </select>
+              <?php
+                $tiposOpts = ['Matutino','Vespertino','Nocturno','Mixto'];
+                $tiposSel  = array_filter(explode(',', $editVacante['tipo'] ?? 'Matutino'));
+              ?>
+              <div class="msel" id="msel-tipo">
+                <div class="msel-control" tabindex="0" onclick="mselToggle(this.parentElement)">
+                  <span class="msel-text<?= $tiposSel ? '' : ' placeholder' ?>"><?= h($tiposSel ? implode(', ', $tiposSel) : 'Selecciona…') ?></span>
+                  <span class="msel-arrow">▾</span>
+                </div>
+                <div class="msel-menu">
+                  <?php foreach ($tiposOpts as $opt): ?>
+                    <label class="msel-opt">
+                      <input type="checkbox" name="tipo[]" value="<?= $opt ?>"
+                             <?= in_array($opt, $tiposSel) ? 'checked' : '' ?>
+                             onchange="mselUpdate(this)">
+                      <?= $opt ?>
+                    </label>
+                  <?php endforeach; ?>
+                </div>
+              </div>
             </div>
             <div class="vf-field">
               <label>Área de Trabajo</label>
@@ -711,7 +757,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
                 <?php endif; ?>
               </td>
               <td><?= h($r['area']) ?></td>
-              <td style="color:#64748b;font-size:12px;"><?= h($r['tipo']) ?></td>
+              <td style="color:#64748b;font-size:12px;"><?= h(str_replace(',', ', ', $r['tipo'])) ?></td>
               <td style="color:#64748b;font-size:12px;">
                 <?= h($r['ubicacion'] ?: '—') ?>
                 <?php if (!empty($r['maps_url'])): ?>
@@ -730,11 +776,43 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
               </td>
               <td><?= vbadge((int)$r['activa']) ?></td>
               <td style="white-space:nowrap;color:#64748b;font-size:12px;"><?= fdate($r['fecha_creacion']) ?></td>
-              <td style="white-space:nowrap;">
-                <a href="?tab=vacantes&edit=<?= $r['id'] ?>" class="btn-sm btn-muted" style="text-decoration:none;display:inline-block;margin-right:2px;">✏️ Editar</a>
+              <td style="position:relative;min-width:150px;">
+                <div class="acciones-row">
+                <a href="?tab=vacantes&edit=<?= $r['id'] ?>" class="btn-sm btn-muted" style="text-decoration:none;display:inline-block;">✏️ Editar</a>
                 <?= actionForm('toggle_vacante', (int)$r['id'], 'vacantes', $csrf, 'btn-sm btn-muted',
                     $r['activa'] ? '⏸ Pausar' : '▶ Activar') ?>
                 <?= actionForm('del_vacante', (int)$r['id'], 'vacantes', $csrf, 'btn-sm btn-danger', '🗑') ?>
+                <div class="link-menu-wrap" style="display:inline-block;position:relative;">
+                  <button type="button" class="btn-sm btn-muted" onclick="linkMenuToggle(this)">🔗 Liga</button>
+                  <div class="link-menu">
+                    <div class="link-menu__item">
+                      <label>Esta vacante</label>
+                      <div class="link-menu__row">
+                        <input type="text" readonly value="<?= h(publicSiteUrl('vacantes.php?id=' . $r['id'])) ?>">
+                        <button type="button" onclick="copyLinkBtn(this)">Copiar</button>
+                      </div>
+                    </div>
+                    <?php if ($r['area']): ?>
+                    <div class="link-menu__item">
+                      <label>Todas de "<?= h($r['area']) ?>"</label>
+                      <div class="link-menu__row">
+                        <input type="text" readonly value="<?= h(publicSiteUrl('vacantes.php?area=' . rawurlencode($r['area']))) ?>">
+                        <button type="button" onclick="copyLinkBtn(this)">Copiar</button>
+                      </div>
+                    </div>
+                    <?php endif; ?>
+                    <?php if ($r['ubicacion']): ?>
+                    <div class="link-menu__item">
+                      <label>Todas en "<?= h($r['ubicacion']) ?>"</label>
+                      <div class="link-menu__row">
+                        <input type="text" readonly value="<?= h(publicSiteUrl('vacantes.php?ubicacion=' . rawurlencode($r['ubicacion']))) ?>">
+                        <button type="button" onclick="copyLinkBtn(this)">Copiar</button>
+                      </div>
+                    </div>
+                    <?php endif; ?>
+                  </div>
+                </div>
+                </div>
               </td>
             </tr>
           <?php endforeach; ?>
@@ -747,5 +825,52 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
   </div><!-- /card -->
 
 </div><!-- /body -->
+<script>
+function mselToggle(msel){
+  document.querySelectorAll('.msel.open').forEach(function(o){ if (o !== msel) o.classList.remove('open'); });
+  msel.classList.toggle('open');
+}
+function mselUpdate(checkbox){
+  var msel = checkbox.closest('.msel');
+  var checked = Array.prototype.map.call(msel.querySelectorAll('input[type=checkbox]:checked'), function(c){ return c.value; });
+  var text = msel.querySelector('.msel-text');
+  if (checked.length) {
+    text.textContent = checked.join(', ');
+    text.classList.remove('placeholder');
+  } else {
+    text.textContent = 'Selecciona…';
+    text.classList.add('placeholder');
+  }
+}
+document.addEventListener('click', function(e){
+  document.querySelectorAll('.msel.open').forEach(function(msel){
+    if (!msel.contains(e.target)) msel.classList.remove('open');
+  });
+  document.querySelectorAll('.link-menu-wrap.open').forEach(function(wrap){
+    if (!wrap.contains(e.target)) wrap.classList.remove('open');
+  });
+});
+function linkMenuToggle(btn){
+  var wrap = btn.closest('.link-menu-wrap');
+  document.querySelectorAll('.link-menu-wrap.open').forEach(function(o){ if (o !== wrap) o.classList.remove('open'); });
+  wrap.classList.toggle('open');
+}
+function copyLinkBtn(btn){
+  var input = btn.previousElementSibling;
+  input.select();
+  input.setSelectionRange(0, 99999);
+  var done = function(){
+    var old = btn.textContent;
+    btn.textContent = '✓ Copiado';
+    setTimeout(function(){ btn.textContent = old; }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(input.value).then(done).catch(function(){ document.execCommand('copy'); done(); });
+  } else {
+    document.execCommand('copy');
+    done();
+  }
+}
+</script>
 </body>
 </html>

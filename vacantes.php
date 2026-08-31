@@ -3,24 +3,41 @@ require_once __DIR__ . '/db/config.php';
 require_once __DIR__ . '/db/csrf.php';
 $csrfToken = generateCsrfToken();
 
-// Cargar vacantes activas desde la BD
+// Filtros para campañas segmentadas (redes sociales): ?id=5, ?area=Limpieza, ?ubicacion=CDMX
+$filterId        = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$filterArea      = isset($_GET['area']) ? trim($_GET['area']) : '';
+$filterUbicacion = isset($_GET['ubicacion']) ? trim($_GET['ubicacion']) : '';
+$hasFilter       = ($filterId > 0 || $filterArea !== '' || $filterUbicacion !== '');
+
+// Cargar vacantes activas desde la BD (con filtros opcionales)
 $db = getDB();
 $vacantes = [];
-$res = $db->query("SELECT id, titulo, area, tipo, descripcion, requisitos, ubicacion, maps_url, form_url, rango_salarial, beneficios
-                   FROM vacantes WHERE activa=1 ORDER BY id DESC");
+$where = ['activa=1'];
+if ($filterId > 0)        $where[] = "id=" . $filterId;
+if ($filterArea !== '')   $where[] = "area='" . $db->real_escape_string($filterArea) . "'";
+if ($filterUbicacion !== '') $where[] = "ubicacion LIKE '%" . $db->real_escape_string($filterUbicacion) . "%'";
+$sql = "SELECT id, titulo, area, tipo, descripcion, requisitos, ubicacion, maps_url, form_url, rango_salarial, beneficios
+        FROM vacantes WHERE " . implode(' AND ', $where) . " ORDER BY id DESC";
+$res = $db->query($sql);
 if ($res) while ($row = $res->fetch_assoc()) $vacantes[] = $row;
 $db->close();
+
+$filterLabelParts = [];
+if ($filterArea !== '')      $filterLabelParts[] = $filterArea;
+if ($filterUbicacion !== '') $filterLabelParts[] = $filterUbicacion;
+$filterLabel = implode(' · ', $filterLabelParts);
+$pageTitleSuffix = $filterLabel !== '' ? " en $filterLabel" : '';
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Vacantes y oportunidades de empleo en Sharclean. Únete a nuestro equipo de limpieza y mantenimiento profesional en México.">
+  <meta name="description" content="Vacantes<?= htmlspecialchars($pageTitleSuffix, ENT_QUOTES, 'UTF-8') ?> en Sharclean. Únete a nuestro equipo de limpieza y mantenimiento profesional en México.">
   <meta name="robots" content="index, follow">
-  <meta property="og:title" content="Vacantes – Trabaja con Sharclean">
+  <meta property="og:title" content="Vacantes<?= htmlspecialchars($pageTitleSuffix, ENT_QUOTES, 'UTF-8') ?> – Trabaja con Sharclean">
   <meta property="og:description" content="Únete al equipo de Sharclean. Ofrecemos salario competitivo, prestaciones de ley y un excelente ambiente de trabajo.">
-  <title>Vacantes – Trabaja con Sharclean</title>
+  <title>Vacantes<?= htmlspecialchars($pageTitleSuffix, ENT_QUOTES, 'UTF-8') ?> – Trabaja con Sharclean</title>
   <link rel="icon" href="images/favicon.ico" type="image/x-icon">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -95,11 +112,27 @@ $db->close();
       <p class="section-subtitle">Selecciona el puesto que más se adapte a tu perfil y aplica directamente por WhatsApp o mediante nuestro formulario.</p>
     </div>
 
+    <?php if ($hasFilter): ?>
+    <div class="reveal" style="max-width:560px;margin:0 auto 2rem;padding:.7rem 1.2rem;background:rgba(2,132,199,.08);border:1px solid rgba(2,132,199,.25);border-radius:var(--radius-md);text-align:center;font-size:.88rem;color:var(--dark);">
+      <?php if ($filterId > 0): ?>
+        Mostrando la vacante seleccionada.
+      <?php elseif ($filterLabel !== ''): ?>
+        Mostrando vacantes de <strong><?= htmlspecialchars($filterLabel, ENT_QUOTES, 'UTF-8') ?></strong>.
+      <?php endif ?>
+      <a href="vacantes.php" style="color:var(--primary);font-weight:600;text-decoration:underline;margin-left:6px;">Ver todas las vacantes</a>
+    </div>
+    <?php endif ?>
+
     <?php if (empty($vacantes)): ?>
     <div style="text-align:center;padding:60px 20px;color:var(--gray);">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px;opacity:.4"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+      <?php if ($hasFilter): ?>
+      <p style="font-size:1.1rem;font-weight:600;margin-bottom:8px;">No encontramos vacantes que coincidan con tu búsqueda</p>
+      <p style="font-size:.9rem;">Es posible que esta vacante ya no esté disponible. <a href="vacantes.php" style="color:var(--primary);font-weight:600;">Ver todas las vacantes</a></p>
+      <?php else: ?>
       <p style="font-size:1.1rem;font-weight:600;margin-bottom:8px;">No hay vacantes disponibles en este momento</p>
       <p style="font-size:.9rem;">Déjanos tus datos en el formulario de abajo y te contactaremos cuando haya una oportunidad.</p>
+      <?php endif ?>
     </div>
     <?php else: ?>
     <div class="vacantes-grid">
@@ -113,7 +146,7 @@ $db->close();
         $delay  = $delays[$i % 3];
         $titulo = htmlspecialchars($v['titulo'],     ENT_QUOTES, 'UTF-8');
         $area   = htmlspecialchars($v['area']   ?? '', ENT_QUOTES, 'UTF-8');
-        $tipo   = htmlspecialchars($v['tipo']   ?? '', ENT_QUOTES, 'UTF-8');
+        $tipo   = htmlspecialchars(str_replace(',', ', ', $v['tipo'] ?? ''), ENT_QUOTES, 'UTF-8');
         $ubic   = htmlspecialchars($v['ubicacion'] ?? '', ENT_QUOTES, 'UTF-8');
         $mapsUrl = htmlspecialchars($v['maps_url'] ?? '', ENT_QUOTES, 'UTF-8');
         $formUrl = htmlspecialchars($v['form_url'] ?? '', ENT_QUOTES, 'UTF-8');
