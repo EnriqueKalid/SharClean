@@ -904,6 +904,106 @@ function injectSpinStyle() {
   document.head.appendChild(style);
 }
 
+/* ── Scroll a vacantes desde ligas filtradas (campañas) ──────── */
+function initFilteredScroll() {
+  const targetId = document.body.dataset.scrollTarget;
+  if (!targetId) return;
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  const navHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-height')) || 72;
+  const top = target.getBoundingClientRect().top + window.scrollY - navHeight;
+  window.scrollTo({ top, behavior: 'smooth' });
+}
+
+/* ── Modal de detalle de vacante ──────────────────────────────── */
+function initVacanteModal() {
+  const modal = $('#modal-vacante');
+  const cards = $$('.vacante-card');
+  if (!modal || !cards.length) return;
+
+  const elBadge    = $('#modal-vacante-badge', modal);
+  const elTitle    = $('#modal-vacante-title', modal);
+  const elSubtitle = $('#modal-vacante-subtitle', modal);
+  const elMeta     = $('#modal-vacante-meta', modal);
+  const elDesc     = $('#modal-vacante-desc', modal);
+  const elReq      = $('#modal-vacante-req', modal);
+  const elBenef    = $('#modal-vacante-benef', modal);
+  const elFooter   = $('#modal-vacante-footer', modal);
+
+  function setBlock(el, label, value) {
+    el.innerHTML = '';
+    if (!value) { el.hidden = true; return; }
+    el.hidden = false;
+    const h = document.createElement('h3');
+    h.textContent = label;
+    const p = document.createElement('p');
+    p.textContent = value;
+    el.append(h, p);
+  }
+
+  function addFooterLink(url, label, cls) {
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    a.className = 'btn ' + cls;
+    a.textContent = label;
+    elFooter.appendChild(a);
+  }
+
+  function openVacanteModal(card) {
+    let data;
+    try { data = JSON.parse(card.dataset.vacante || '{}'); } catch { return; }
+
+    elBadge.textContent = data.area || 'Vacante';
+    elTitle.textContent = data.titulo || '';
+    elSubtitle.textContent = [data.tipo, data.ubicacion].filter(Boolean).join(' · ');
+
+    elMeta.innerHTML = '';
+    [['Salario', data.salario], ['Turno', data.tipo], ['Ubicación', data.ubicacion]]
+      .filter(([, v]) => v)
+      .forEach(([label, value]) => {
+        const item = document.createElement('div');
+        item.className = 'vacmodal-meta__item';
+        const l = document.createElement('span');
+        l.className = 'vacmodal-meta__label'; l.textContent = label;
+        const v = document.createElement('span');
+        v.className = 'vacmodal-meta__value'; v.textContent = value;
+        item.append(l, v);
+        elMeta.appendChild(item);
+      });
+
+    setBlock(elDesc, 'Descripción del puesto', data.descripcion);
+    setBlock(elReq, 'Requisitos', data.requisitos);
+    setBlock(elBenef, 'Beneficios', data.beneficios);
+
+    elFooter.innerHTML = '';
+    addFooterLink(data.formUrl, 'Aplica aquí', 'btn-green');
+    addFooterLink(data.mapsUrl, 'Ver mapa', 'btn-outline');
+
+    modal.removeAttribute('hidden');
+    document.body.style.overflow = 'hidden';
+    modal.querySelector('.legalmodal__close, [data-close-modal]')?.focus();
+  }
+
+  cards.forEach(card => {
+    on(card, 'click', e => {
+      if (e.target.closest('.vacante-card__footer')) return;
+      openVacanteModal(card);
+    });
+    on(card, 'keydown', e => {
+      if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('.vacante-card__footer')) {
+        e.preventDefault();
+        openVacanteModal(card);
+      }
+    });
+  });
+
+  // Liga a una vacante específica (?id=5): abre su detalle directo al cargar
+  if (document.body.dataset.autoOpenVacante) {
+    openVacanteModal(cards[0]);
+  }
+}
+
 /* ── Legal Modals ──────────────────────────────────────────── */
 function initLegalModals() {
   const modals = {
@@ -962,4 +1062,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initAboutCarousel();
   initFileInputs();
   initLegalModals();
+  initVacanteModal();
+  initFilteredScroll();
 });

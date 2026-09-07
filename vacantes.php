@@ -16,17 +16,33 @@ $where = ['activa=1'];
 if ($filterId > 0)        $where[] = "id=" . $filterId;
 if ($filterArea !== '')   $where[] = "area='" . $db->real_escape_string($filterArea) . "'";
 if ($filterUbicacion !== '') $where[] = "ubicacion LIKE '%" . $db->real_escape_string($filterUbicacion) . "%'";
-$sql = "SELECT id, titulo, area, tipo, descripcion, requisitos, ubicacion, maps_url, form_url, rango_salarial, beneficios
+$sql = "SELECT id, titulo, area, tipo, descripcion, requisitos, ubicacion, maps_url, form_url, rango_salarial, salario_periodo, beneficios
         FROM vacantes WHERE " . implode(' AND ', $where) . " ORDER BY id DESC";
 $res = $db->query($sql);
 if ($res) while ($row = $res->fetch_assoc()) $vacantes[] = $row;
 $db->close();
+
+$periodoSufijo = [
+    'Mensual'   => '/ mes',
+    'Quincenal' => '/ quincena',
+    'Semanal'   => '/ semana',
+    'Diario'    => '/ día',
+    'Por hora'  => '/ hora',
+];
 
 $filterLabelParts = [];
 if ($filterArea !== '')      $filterLabelParts[] = $filterArea;
 if ($filterUbicacion !== '') $filterLabelParts[] = $filterUbicacion;
 $filterLabel = implode(' · ', $filterLabelParts);
 $pageTitleSuffix = $filterLabel !== '' ? " en $filterLabel" : '';
+
+// Liga a una vacante específica (?id=5): abre su detalle directo, sin necesitar scroll
+$bodyAttrs = '';
+if ($filterId > 0) {
+    $bodyAttrs = ' data-auto-open-vacante="1"';
+} elseif ($hasFilter) {
+    $bodyAttrs = ' data-scroll-target="vacantes-listado"';
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -44,7 +60,7 @@ $pageTitleSuffix = $filterLabel !== '' ? " en $filterLabel" : '';
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/main.css">
 </head>
-<body>
+<body<?= $bodyAttrs ?>>
 
 <!-- ── NAVBAR ──────────────────────────────────────────────── -->
 <nav class="navbar solid" role="navigation" aria-label="Navegación principal">
@@ -103,7 +119,7 @@ $pageTitleSuffix = $filterLabel !== '' ? " en $filterLabel" : '';
 
 
 <!-- ── VACANTES GRID ───────────────────────────────────────── -->
-<section class="section" style="background:var(--gradient-section);">
+<section id="vacantes-listado" class="section" style="background:var(--gradient-section);">
   <div class="container">
 
     <div class="text-center reveal" style="margin-bottom:1rem;">
@@ -150,38 +166,47 @@ $pageTitleSuffix = $filterLabel !== '' ? " en $filterLabel" : '';
         $ubic   = htmlspecialchars($v['ubicacion'] ?? '', ENT_QUOTES, 'UTF-8');
         $mapsUrl = htmlspecialchars($v['maps_url'] ?? '', ENT_QUOTES, 'UTF-8');
         $formUrl = htmlspecialchars($v['form_url'] ?? '', ENT_QUOTES, 'UTF-8');
-        $salario = htmlspecialchars($v['rango_salarial'] ?? '', ENT_QUOTES, 'UTF-8');
+        $periodo = $v['salario_periodo'] ?? 'Mensual';
+        $salarioRaw = trim(($v['rango_salarial'] ?? '') !== '' ? $v['rango_salarial'] . ' ' . ($periodoSufijo[$periodo] ?? '') : '');
+        $salario = htmlspecialchars($salarioRaw, ENT_QUOTES, 'UTF-8');
         $benef   = htmlspecialchars($v['beneficios'] ?? '', ENT_QUOTES, 'UTF-8');
         $desc   = htmlspecialchars($v['descripcion'] ?? '', ENT_QUOTES, 'UTF-8');
         $req    = htmlspecialchars($v['requisitos']  ?? '', ENT_QUOTES, 'UTF-8');
+        $vacanteData = htmlspecialchars(json_encode([
+            'titulo'      => $v['titulo'] ?? '',
+            'area'        => $v['area'] ?? '',
+            'tipo'        => str_replace(',', ', ', $v['tipo'] ?? ''),
+            'ubicacion'   => $v['ubicacion'] ?? '',
+            'salario'     => $salarioRaw,
+            'descripcion' => $v['descripcion'] ?? '',
+            'requisitos'  => $v['requisitos'] ?? '',
+            'beneficios'  => $v['beneficios'] ?? '',
+            'formUrl'     => $v['form_url'] ?? '',
+            'mapsUrl'     => $v['maps_url'] ?? '',
+        ], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
       ?>
-      <article class="vacante-card reveal <?= $delay ?>">
+      <article class="vacante-card reveal <?= $delay ?>" tabindex="0" role="button"
+               aria-label="Ver detalle de <?= $titulo ?>" data-vacante="<?= $vacanteData ?>">
         <div class="vacante-card__header">
           <h3 class="vacante-card__title"><?= $titulo ?></h3>
           <span class="vacante-card__badge">Activa</span>
         </div>
         <div class="vacante-card__meta">
           <?php if ($area): ?>
-          <span class="vacante-card__meta-item"><?= $svgBriefcase ?><?= $area ?></span>
+          <span class="vacante-card__meta-item"><?= $svgBriefcase ?><span><span class="vacante-card__meta-label">Área</span><?= $area ?></span></span>
           <?php endif ?>
           <?php if ($tipo): ?>
-          <span class="vacante-card__meta-item"><?= $svgClock ?><?= $tipo ?></span>
+          <span class="vacante-card__meta-item"><?= $svgClock ?><span><span class="vacante-card__meta-label">Turno</span><?= $tipo ?></span></span>
           <?php endif ?>
           <?php if ($ubic): ?>
-          <span class="vacante-card__meta-item"><?= $svgPin ?><?= $ubic ?></span>
+          <span class="vacante-card__meta-item"><?= $svgPin ?><span><span class="vacante-card__meta-label">Ubicación</span><?= $ubic ?></span></span>
           <?php endif ?>
           <?php if ($salario): ?>
-          <span class="vacante-card__meta-item"><?= $svgMoney ?><?= $salario ?></span>
+          <span class="vacante-card__meta-item"><?= $svgMoney ?><span><span class="vacante-card__meta-label">Salario</span><?= $salario ?></span></span>
           <?php endif ?>
         </div>
         <?php if ($desc): ?>
-        <p style="font-size:.88rem;color:var(--gray);margin-bottom:.75rem;line-height:1.6;"><?= $desc ?></p>
-        <?php endif ?>
-        <?php if ($req): ?>
-        <p class="vacante-card__reqs"><strong>Requisitos:</strong> <?= $req ?></p>
-        <?php endif ?>
-        <?php if ($benef): ?>
-        <p class="vacante-card__reqs"><strong>Beneficios:</strong> <?= nl2br($benef) ?></p>
+        <p class="vacante-card__desc"><?= $desc ?></p>
         <?php endif ?>
         <div class="vacante-card__footer">
           <?php if ($formUrl): ?>
@@ -203,6 +228,29 @@ $pageTitleSuffix = $filterLabel !== '' ? " en $filterLabel" : '';
     <?php endif ?>
   </div>
 </section>
+
+
+<!-- ── MODAL – DETALLE DE VACANTE ─────────────────────────────── -->
+<div id="modal-vacante" class="legalmodal" role="dialog" aria-modal="true" aria-labelledby="modal-vacante-title" hidden>
+  <div class="legalmodal__overlay" data-close-modal></div>
+  <div class="legalmodal__panel">
+    <button class="legalmodal__close" data-close-modal aria-label="Cerrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="legalmodal__header">
+      <span class="legalmodal__badge" id="modal-vacante-badge">Vacante</span>
+      <h2 class="legalmodal__title" id="modal-vacante-title"></h2>
+      <p class="legalmodal__subtitle" id="modal-vacante-subtitle"></p>
+    </div>
+    <div class="legalmodal__body">
+      <div class="vacmodal-meta" id="modal-vacante-meta"></div>
+      <div id="modal-vacante-desc"></div>
+      <div id="modal-vacante-req"></div>
+      <div id="modal-vacante-benef"></div>
+    </div>
+    <div class="legalmodal__footer" id="modal-vacante-footer"></div>
+  </div>
+</div>
 
 
 <!-- ── APPLICATION FORM ─────────────────────────────────────── -->

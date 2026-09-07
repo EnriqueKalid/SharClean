@@ -100,15 +100,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $rango_sal = '';
         }
+        $periodosValidos = ['Mensual','Quincenal','Semanal','Diario','Por hora'];
+        $salario_periodo = trim($_POST['salario_periodo'] ?? 'Mensual');
+        if (!in_array($salario_periodo, $periodosValidos, true)) $salario_periodo = 'Mensual';
         $beneficios = trim($_POST['beneficios'] ?? '');
         $activa    = isset($_POST['activa']) ? 1 : 0;
         if ($titulo !== '' && $form_url !== '') {
             if ($id > 0) {
-                $s = $db->prepare('UPDATE vacantes SET titulo=?,area=?,tipo=?,descripcion=?,requisitos=?,ubicacion=?,maps_url=?,form_url=?,rango_salarial=?,beneficios=?,activa=? WHERE id=?');
-                $s->bind_param('ssssssssssii', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$form_url,$rango_sal,$beneficios,$activa,$id);
+                $s = $db->prepare('UPDATE vacantes SET titulo=?,area=?,tipo=?,descripcion=?,requisitos=?,ubicacion=?,maps_url=?,form_url=?,rango_salarial=?,salario_periodo=?,beneficios=?,activa=? WHERE id=?');
+                $s->bind_param('sssssssssssii', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$form_url,$rango_sal,$salario_periodo,$beneficios,$activa,$id);
             } else {
-                $s = $db->prepare('INSERT INTO vacantes (titulo,area,tipo,descripcion,requisitos,ubicacion,maps_url,form_url,rango_salarial,beneficios,activa) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
-                $s->bind_param('ssssssssssi', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$form_url,$rango_sal,$beneficios,$activa);
+                $s = $db->prepare('INSERT INTO vacantes (titulo,area,tipo,descripcion,requisitos,ubicacion,maps_url,form_url,rango_salarial,salario_periodo,beneficios,activa) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+                $s->bind_param('sssssssssssi', $titulo,$area,$tipo,$desc,$req,$ubicacion,$maps_url,$form_url,$rango_sal,$salario_periodo,$beneficios,$activa);
             }
             $s->execute();
         }
@@ -678,6 +681,15 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
                      value="<?= h((string)$editSalMax) ?>"
                      placeholder="Ej. 9000">
             </div>
+            <div class="vf-field">
+              <label>Periodo del salario</label>
+              <?php $periodoActual = $editVacante['salario_periodo'] ?? 'Mensual'; ?>
+              <select name="salario_periodo">
+                <?php foreach (['Mensual','Quincenal','Semanal','Diario','Por hora'] as $p): ?>
+                  <option value="<?= $p ?>" <?= $periodoActual === $p ? 'selected' : '' ?>><?= $p ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
             <div class="vf-field vf-span2">
               <label>Beneficios <span style="font-weight:400;color:#94a3b8;">(opcional)</span></label>
               <textarea name="beneficios" rows="3"
@@ -765,7 +777,12 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
                      title="Ver en Google Maps" style="margin-left:4px;text-decoration:none;">📍</a>
                 <?php endif; ?>
               </td>
-              <td style="color:#64748b;font-size:12px;"><?= h($r['rango_salarial'] ?: '—') ?></td>
+              <td style="color:#64748b;font-size:12px;">
+                <?= h($r['rango_salarial'] ?: '—') ?>
+                <?php if ($r['rango_salarial']): ?>
+                  <br><span style="color:#94a3b8;"><?= h($r['salario_periodo'] ?? 'Mensual') ?></span>
+                <?php endif; ?>
+              </td>
               <td style="font-size:12px;">
                 <?php if (!empty($r['form_url'])): ?>
                   <a href="<?= h($r['form_url']) ?>" target="_blank" rel="noopener"
