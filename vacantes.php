@@ -58,7 +58,7 @@ if ($filterId > 0) {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/main.css?v=<?= filemtime(__DIR__ . '/css/main.css') ?>">
 </head>
 <body<?= $bodyAttrs ?>>
 
@@ -211,7 +211,7 @@ if ($filterId > 0) {
         <div class="vacante-card__footer">
           <span class="vacante-card__cta">
             Ver detalle y aplicar
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
           </span>
         </div>
       </article>
@@ -433,6 +433,6 @@ if ($filterId > 0) {
   <span class="whatsapp-float__tooltip">Contáctanos</span>
 </div>
 
-<script src="js/main.js"></script>
+<script src="js/main.js?v=<?= filemtime(__DIR__ . '/js/main.js') ?>"></script>
 </body>
 </html>

@@ -28,7 +28,7 @@ $cfgTelefono = appConfig('empresa_telefono',  '+52 55-8945-4415');
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/main.css?v=<?= filemtime(__DIR__ . '/css/main.css') ?>">
   <script>window.siteCfg={empresa:<?= json_encode($cfgEmpresa) ?>,giro:<?= json_encode($cfgGiro) ?>,emailInfo:<?= json_encode($cfgEmailInfo) ?>,telefono:<?= json_encode($cfgTelefono) ?>};</script>
 </head>
 <body>
@@ -895,6 +895,6 @@ $cfgTelefono = appConfig('empresa_telefono',  '+52 55-8945-4415');
 </div>
 
 
-<script src="js/main.js"></script>
+<script src="js/main.js?v=<?= filemtime(__DIR__ . '/js/main.js') ?>"></script>
 </body>
 </html>
