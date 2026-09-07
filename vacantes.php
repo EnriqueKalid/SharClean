@@ -209,18 +209,10 @@ if ($filterId > 0) {
         <p class="vacante-card__desc"><?= $desc ?></p>
         <?php endif ?>
         <div class="vacante-card__footer">
-          <?php if ($formUrl): ?>
-          <a href="<?= $formUrl ?>" target="_blank" rel="noopener noreferrer"
-             class="btn btn-green">
-            Aplica aquí
-          </a>
-          <?php endif ?>
-          <?php if ($mapsUrl): ?>
-          <a href="<?= $mapsUrl ?>" target="_blank" rel="noopener noreferrer"
-             class="btn btn-outline">
-            <?= $svgPin ?> Ver mapa
-          </a>
-          <?php endif ?>
+          <span class="vacante-card__cta">
+            Ver detalle y aplicar
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </span>
         </div>
       </article>
       <?php endforeach ?>

@@ -986,12 +986,9 @@ function initVacanteModal() {
   }
 
   cards.forEach(card => {
-    on(card, 'click', e => {
-      if (e.target.closest('.vacante-card__footer')) return;
-      openVacanteModal(card);
-    });
+    on(card, 'click', () => openVacanteModal(card));
     on(card, 'keydown', e => {
-      if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('.vacante-card__footer')) {
+      if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         openVacanteModal(card);
       }
