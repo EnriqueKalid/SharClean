@@ -1,0 +1,12 @@
+# Bloquear acceso directo a todos los archivos subidos (CVs, fotos de
+# referencia, selfies de check-in). Se sirven únicamente a través de
+# scripts protegidos (admin/cv.php, admin/empleado_foto.php,
+# admin/asistencia_foto.php, portal/mi_foto.php).
+# Sintaxis dual compatible Apache 2.2 / 2.4
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

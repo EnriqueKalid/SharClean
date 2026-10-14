@@ -104,6 +104,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $aplicacion_id = (int)($_POST['aplicacion_id']   ?? 0) ?: null;
         $notas         = trim($_POST['notas']             ?? '') ?: null;
 
+        /* ── Portal del empleado ── */
+        $portal_username = trim($_POST['portal_username'] ?? '') ?: null;
+        $portal_password = $_POST['portal_password'] ?? '';
+        $portal_pin      = trim($_POST['portal_pin'] ?? '');
+        $portal_activo   = ($_POST['portal_activo'] ?? '1') === '0' ? 0 : 1;
+
+        /* ── Foto de referencia (si se subió una nueva) ── */
+        $fotoReferenciaNueva = null;
+        if (!empty($_FILES['foto_referencia']['name']) && $_FILES['foto_referencia']['error'] === UPLOAD_ERR_OK) {
+            $allowedTypes = ['image/jpeg', 'image/png'];
+            $maxSize      = 3 * 1024 * 1024; // 3 MB
+            if (in_array($_FILES['foto_referencia']['type'], $allowedTypes, true)
+                && $_FILES['foto_referencia']['size'] <= $maxSize) {
+                $uploadDir = __DIR__ . '/../uploads/empleados/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0750, true);
+                $ext  = pathinfo($_FILES['foto_referencia']['name'], PATHINFO_EXTENSION);
+                $name = uniqid('ref_', true) . '.' . strtolower($ext);
+                if (move_uploaded_file($_FILES['foto_referencia']['tmp_name'], $uploadDir . $name)) {
+                    $fotoReferenciaNueva = $name;
+                }
+            }
+        }
+
         if ($nombre !== '' && $ap_pat !== '' && $fecha_ingreso !== '') {
             if ($id > 0) {
                 /* ── UPDATE ── */
@@ -178,6 +201,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $su->execute();
                 }
             }
+
+            /* ── Guardar foto de referencia / credenciales de portal ── */
+            $empIdFinal = $id > 0 ? $id : $new_id;
+            $cols   = ['portal_username=?', 'portal_activo=?'];
+            $types  = 'si';
+            $params = [$portal_username, $portal_activo];
+
+            if ($fotoReferenciaNueva !== null) {
+                $cols[]   = 'foto_referencia=?';
+                $types   .= 's';
+                $params[] = $fotoReferenciaNueva;
+            }
+            if ($portal_password !== '') {
+                $cols[]   = 'portal_password_hash=?';
+                $types   .= 's';
+                $params[] = password_hash($portal_password, PASSWORD_DEFAULT);
+            }
+            if ($portal_pin !== '' && preg_match('/^\d{4,6}$/', $portal_pin)) {
+                $cols[]   = 'portal_pin_hash=?';
+                $types   .= 's';
+                $params[] = password_hash($portal_pin, PASSWORD_DEFAULT);
+            }
+
+            $types   .= 'i';
+            $params[] = $empIdFinal;
+            $sp = $db->prepare('UPDATE empleados SET ' . implode(',', $cols) . ' WHERE id=?');
+            $sp->bind_param($types, ...$params);
+            $sp->execute();
         }
     } elseif ($act === 'toggle_baja' && $id > 0) {
         $row = $db->query("SELECT estatus FROM empleados WHERE id=$id LIMIT 1")->fetch_assoc();
@@ -434,7 +485,7 @@ textarea.vf-inp{resize:vertical;}
     <?php endif; ?>
 
     <div class="form-wrap">
-      <form method="post">
+      <form method="post" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token"    value="<?= h($csrf) ?>">
         <input type="hidden" name="action"        value="save_empleado">
         <input type="hidden" name="id"            value="<?= (int)($editEmp['id'] ?? 0) ?>">
@@ -623,9 +674,44 @@ textarea.vf-inp{resize:vertical;}
           </div>
         </div>
 
-        <!-- ⑥ Notas internas -->
+        <!-- ⑥ Portal del empleado (check-in) -->
         <div class="form-section">
-          <div class="form-section-title">⑥ Notas internas</div>
+          <div class="form-section-title">⑥ Portal del empleado — check-in</div>
+          <div class="vf-grid">
+            <div class="vf-field">
+              <label>Foto de referencia <span style="font-weight:400;color:#94a3b8;">(para verificar la selfie del check-in)</span></label>
+              <?php if (!empty($pre['foto_referencia'])): ?>
+                <div style="margin-bottom:6px;">
+                  <img src="empleado_foto.php?emp=<?= (int)($editEmp['id'] ?? 0) ?>" alt="Foto actual"
+                       style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1.5px solid #e2e8f0;">
+                </div>
+              <?php endif; ?>
+              <input type="file" name="foto_referencia" class="vf-inp" accept="image/jpeg,image/png">
+            </div>
+            <div class="vf-field">
+              <label>Usuario de portal</label>
+              <input type="text" name="portal_username" class="vf-inp" maxlength="50"
+                     value="<?= $v('portal_username') ?>" placeholder="nombre.apellido" autocomplete="off">
+            </div>
+            <div class="vf-field">
+              <label>Nueva contraseña <span style="font-weight:400;color:#94a3b8;">(dejar vacío para no cambiar)</span></label>
+              <input type="password" name="portal_password" class="vf-inp" autocomplete="new-password" placeholder="••••••••">
+            </div>
+            <div class="vf-field">
+              <label>PIN alterno <span style="font-weight:400;color:#94a3b8;">(4-6 dígitos, para empleados con impedimento)</span></label>
+              <input type="text" name="portal_pin" class="vf-inp" maxlength="6" inputmode="numeric"
+                     autocomplete="off" placeholder="Dejar vacío para no cambiar">
+            </div>
+            <div class="vf-field">
+              <label>Acceso al portal</label>
+              <?= sel('portal_activo', ['1' => 'Habilitado', '0' => 'Deshabilitado'], (string)($pre['portal_activo'] ?? '1')) ?>
+            </div>
+          </div>
+        </div>
+
+        <!-- ⑦ Notas internas -->
+        <div class="form-section">
+          <div class="form-section-title">⑦ Notas internas</div>
           <div class="vf-field">
             <label>Notas del expediente</label>
             <textarea name="notas" class="vf-inp" rows="3"

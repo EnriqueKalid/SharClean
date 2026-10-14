@@ -4,30 +4,11 @@ declare(strict_types=1);
 require_once __DIR__ . '/auth.php';
 requirePermiso('asistencia');
 require_once __DIR__ . '/../db/csrf.php';
+require_once __DIR__ . '/../db/asistencia_calc.php';
 
 /* ── Helpers ──────────────────────────────────────────────── */
 function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 function fd(string $d): string { return $d ? date('d/m/Y', strtotime($d)) : '—'; }
-
-function calcHorasTrabajadas(?string $entrada, ?string $salida): ?float {
-    if (!$entrada || !$salida) return null;
-    $e = strtotime("2000-01-01 $entrada");
-    $s = strtotime("2000-01-01 $salida");
-    return ($s > $e) ? round(($s - $e) / 3600, 2) : null;
-}
-function calcHorasExtra(?float $trabajadas, int $jornada): float {
-    return ($trabajadas !== null) ? max(0, round($trabajadas - $jornada, 2)) : 0;
-}
-function calcRetardo(?string $hora_entrada, string $hora_base, int $tolerancia): array {
-    if (!$hora_entrada) return [false, 0];
-    $te = strtotime("2000-01-01 $hora_entrada");
-    $tb = strtotime("2000-01-01 $hora_base") + ($tolerancia * 60);
-    if ($te > $tb) {
-        $min = (int)round(($te - strtotime("2000-01-01 $hora_base")) / 60);
-        return [true, $min];
-    }
-    return [false, 0];
-}
 
 function tbadge(string $tipo): string {
     $m = [
@@ -188,7 +169,10 @@ if ($view === 'dia') {
                 e.jornada_horas, e.hora_entrada_esperada, e.tolerancia_min,
                 d.nombre AS dept_nombre,
                 a.id AS asist_id, a.tipo, a.hora_entrada, a.hora_salida,
-                a.horas_trabajadas, a.horas_extra, a.retardo, a.minutos_retardo, a.observaciones
+                a.horas_trabajadas, a.horas_extra, a.retardo, a.minutos_retardo, a.observaciones,
+                a.capturado_por, a.checkin_lat, a.checkin_lng, a.checkout_lat, a.checkout_lng,
+                a.checkin_foto, a.checkout_foto, a.checkin_face_score, a.checkout_face_score,
+                a.revision_manual
          FROM empleados e
          LEFT JOIN departamentos d ON d.id = e.departamento_id
          LEFT JOIN asistencia a ON a.empleado_id = e.id AND a.fecha = '$fecha'
@@ -315,6 +299,8 @@ input[type=text].inp-sm{width:180px;}
 .emp-sub{font-size:11px;color:#94a3b8;margin-top:1px;}
 .num-emp{font-size:11px;font-weight:700;color:#7c3aed;background:#ede9fe;padding:1px 6px;border-radius:3px;}
 .retardo-badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;}
+.chk-audit{display:inline-flex;gap:6px;align-items:center;font-size:11px;color:#0369a1;background:#f0f9ff;padding:2px 8px;border-radius:5px;border:1px solid #bae6fd;}
+.chk-audit a{color:#0284C7;text-decoration:underline;}
 /* Resumen grid */
 .res-cell{display:block;text-align:center;font-size:10px;font-weight:700;padding:3px 2px;border-radius:3px;min-width:22px;}
 .res-empty{background:#f8fafc;color:#cbd5e1;}
@@ -464,6 +450,27 @@ input[type=text].inp-sm{width:180px;}
                     <?php endif; ?>
                     <?php if ($r['retardo']): ?>
                       <span class="retardo-badge">⏰ <?= $r['minutos_retardo'] ?>min retardo</span>
+                    <?php endif; ?>
+                  </span>
+                <?php endif; ?>
+
+                <?php if (($r['capturado_por'] ?? '') === 'Empleado'): ?>
+                  <span class="chk-audit" title="Marcado por el propio empleado desde el portal de check-in">
+                    📱 Autoservicio
+                    <?php if ($r['checkin_foto']): ?>
+                      <a href="asistencia_foto.php?a=<?= (int)$r['asist_id'] ?>&tipo=checkin" target="_blank" rel="noopener">📷 entrada</a>
+                    <?php endif; ?>
+                    <?php if ($r['checkout_foto']): ?>
+                      <a href="asistencia_foto.php?a=<?= (int)$r['asist_id'] ?>&tipo=checkout" target="_blank" rel="noopener">📷 salida</a>
+                    <?php endif; ?>
+                    <?php if ($r['checkin_lat'] !== null && $r['checkin_lng'] !== null): ?>
+                      <a href="https://www.google.com/maps?q=<?= h((string)$r['checkin_lat']) ?>,<?= h((string)$r['checkin_lng']) ?>" target="_blank" rel="noopener">📍 mapa</a>
+                    <?php endif; ?>
+                    <?php if ($r['checkin_face_score'] !== null): ?>
+                      <span>· rostro <?= number_format((float)$r['checkin_face_score'], 0) ?>%</span>
+                    <?php endif; ?>
+                    <?php if ($r['revision_manual']): ?>
+                      <span class="retardo-badge" style="background:#fee2e2;color:#991b1b;">⚠ revisar</span>
                     <?php endif; ?>
                   </span>
                 <?php endif; ?>

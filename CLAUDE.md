@@ -29,6 +29,12 @@ Single-tenant, solo uso interno.
 | `solicitar.php` | Formulario público para solicitar vacaciones/permisos |
 | `apply.php` | Handler público de postulaciones web |
 | `db/app_config.php` | Helper `appConfig($key)` / `setAppConfig($key, $val)` — carga tabla config con caché estático |
+| `db/asistencia_calc.php` | Helpers compartidos `calcHorasTrabajadas()`/`calcHorasExtra()`/`calcRetardo()` (admin + portal) |
+| `portal/login.php` | Login de empleado para el portal de check-in (usuario+password o número de empleado+PIN) |
+| `portal/checkin.php` | Pantalla de check-in/check-out: geolocalización + selfie + verificación facial en navegador |
+| `portal/checkin_submit.php` | Handler POST que guarda el check-in/out en `asistencia` |
+| `portal/mi_foto.php` | Sirve la foto de referencia del empleado logueado (para comparar en el navegador) |
+| `admin/asistencia_foto.php` / `admin/empleado_foto.php` | Sirven selfies de check-in y foto de referencia al admin (protegidas) |
 
 ## Nota crítica — mysqli sin mysqlnd
 
@@ -58,8 +64,12 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 - `aplicacion_notas` — historial de notas por candidato
 - `departamentos` — catálogo (Operaciones, Limpieza, Mantenimiento, Administración, Ventas)
 - `puestos` — catálogo vinculado a departamentos
-- `empleados` — expediente completo (datos personales, fiscales, laborales, bancarios)
-- `asistencia` — registro diario con UNIQUE(empleado_id, fecha)
+- `empleados` — expediente completo (datos personales, fiscales, laborales, bancarios);
+  incluye credenciales del portal de check-in (`portal_username`, `portal_password_hash`,
+  `portal_pin_hash`, `portal_activo`) y `foto_referencia` para verificación facial
+- `asistencia` — registro diario con UNIQUE(empleado_id, fecha); incluye columnas de
+  check-in/out propio (`checkin_lat/lng`, `checkout_lat/lng`, `checkin_foto`,
+  `checkout_foto`, `checkin_face_score`, `checkout_face_score`, `revision_manual`)
 - `incidencias` — faltas, permisos, vacaciones con flujo de aprobación
 - `nomina_periodos` — períodos de nómina (semanal/quincenal)
 - `nomina_lineas` — líneas de nómina por empleado
@@ -76,6 +86,7 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 7. `db/migrate_chatbot_v1.sql` ✅
 8. `db/migrate_usuarios_v1.sql` ✅
 9. `db/migrate_reset_tokens_v1.sql` ✅
+10. `db/migrate_checkin_v1.sql` ⏳ pendiente de ejecutar en servidor (`sharclea_dbapp`)
 
 ## Estado de módulos RRHH
 
@@ -90,12 +101,15 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 | Reportes | `admin/reportes.php` | ✅ Completo |
 | Configuración | `admin/configuracion.php` | ✅ Completo |
 | Usuarios y Perfiles | `admin/usuarios.php` | ✅ Completo (requiere ejecutar migrate_usuarios_v1.sql) |
+| Check-in de empleados (portal self-service) | `portal/*` + `admin/empleados.php` (foto/credenciales) + `admin/asistencia.php` (auditoría) | ✅ Código completo — pendiente ejecutar `migrate_checkin_v1.sql` y probar en servidor (HTTPS, cámara/GPS reales) |
 
-## Siguiente módulo a desarrollar: Configuración
+## Siguiente módulo a desarrollar: Portal de vacaciones/incapacidades/permisos
 
-Módulo de configuración del sistema para permitir la comercialización de la aplicación.
-Incluirá: datos de la empresa (nombre, logo, RFC, colores), credenciales de correo SMTP,
-y parámetros generales del sistema.
+Con el login de empleado ya existente (`portal/auth.php`), migrar `solicitar.php` para que
+use ese login en vez de solo el número de empleado, y agregar ahí mismo las solicitudes de
+vacaciones/incapacidades/permisos directamente desde el portal (hoy siguen siendo un
+formulario público aparte). Fuera de ese alcance también queda el geofencing (restringir el
+check-in a un radio permitido alrededor de la oficina/sitio de trabajo).
 
 ## Notas del módulo Nómina
 
@@ -117,3 +131,24 @@ y parámetros generales del sistema.
 - Vista detalle genera documento imprimible con sección de firmas
 - Estados: borrador → firmado → pagado
 - Checkbox opcional para marcar empleado como baja_definitiva al guardar
+
+## Notas del módulo Check-in de empleados
+
+- Login de empleado independiente del login admin: usuario+password (`portal_username`/
+  `portal_password_hash` en `empleados`) como método estándar, PIN+número de empleado
+  (`portal_pin_hash`) como alternativa para quien tenga impedimento. Lo administra el admin
+  desde `admin/empleados.php`, sección ⑥ "Portal del empleado — check-in".
+- Verificación facial 100% en el navegador con `face-api.js` (auto-hospedado en
+  `portal/assets/face-api/`, sin llamadas a servicios de terceros): compara la selfie
+  contra la `foto_referencia` del empleado. Es una validación "suave" — si no coincide tras
+  3 intentos, o si el dispositivo no soporta la comparación, se deja pasar el check-in pero
+  queda `revision_manual=1` para que el admin lo revise en `admin/asistencia.php`.
+  El servidor nunca hace la comparación — solo recibe el score ya calculado.
+- `getUserMedia` (cámara) y `navigator.geolocation` requieren contexto seguro (HTTPS o
+  localhost) — probar siempre en el dominio real, no funciona en `http://`.
+- Las fórmulas de horas trabajadas/extra/retardo viven en `db/asistencia_calc.php`
+  (extraídas de `admin/asistencia.php` para no duplicarlas en `portal/checkin_submit.php`).
+- Filas creadas por el propio empleado se guardan con `asistencia.capturado_por='Empleado'`,
+  distinguibles de `'Admin'`/`'Bulk-Admin'`/`'Sistema'`.
+- Selfies y foto de referencia se sirven solo vía scripts protegidos (nunca acceso directo
+  a `/uploads/` — bloqueado por `uploads/.htaccess`), mismo patrón que `admin/cv.php`.
