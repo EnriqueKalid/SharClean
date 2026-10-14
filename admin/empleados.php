@@ -566,21 +566,22 @@ textarea.vf-inp{resize:vertical;}
               <label>Calle y número</label>
               <input type="text" name="direccion" class="vf-inp" value="<?= $v('direccion') ?>" placeholder="Calle, número exterior e interior">
             </div>
-            <div class="vf-field">
+            <div class="vf-field" id="colonia-wrap">
               <label>Colonia</label>
-              <input type="text" name="colonia" class="vf-inp" value="<?= $v('colonia') ?>">
+              <input type="text" id="colonia-input" name="colonia" class="vf-inp" value="<?= $v('colonia') ?>">
             </div>
             <div class="vf-field">
               <label>Ciudad</label>
-              <input type="text" name="ciudad" class="vf-inp" value="<?= $v('ciudad', 'CDMX') ?>">
+              <input type="text" id="ciudad-input" name="ciudad" class="vf-inp" value="<?= $v('ciudad', 'CDMX') ?>">
             </div>
             <div class="vf-field">
               <label>Estado</label>
-              <input type="text" name="estado_residencia" class="vf-inp" value="<?= $v('estado_residencia') ?>">
+              <input type="text" id="estado-input" name="estado_residencia" class="vf-inp" value="<?= $v('estado_residencia') ?>">
             </div>
             <div class="vf-field">
               <label>C.P.</label>
-              <input type="text" name="cp" class="vf-inp" maxlength="5" value="<?= $v('cp') ?>" placeholder="06600">
+              <input type="text" id="cp-input" name="cp" class="vf-inp" maxlength="5" value="<?= $v('cp') ?>" placeholder="06600">
+              <span id="cp-status" style="font-size:11px;color:#94a3b8;"></span>
             </div>
           </div>
         </div>
@@ -853,6 +854,59 @@ textarea.vf-inp{resize:vertical;}
 
   deptSel.addEventListener('change', filterPuestos);
   filterPuestos();
+})();
+
+/* ── Autocompletar Colonia/Ciudad/Estado a partir del C.P. ── */
+(function() {
+  const cpInput     = document.getElementById('cp-input');
+  const cpStatus    = document.getElementById('cp-status');
+  const coloniaWrap = document.getElementById('colonia-wrap');
+  const ciudadInput = document.getElementById('ciudad-input');
+  const estadoInput = document.getElementById('estado-input');
+  if (!cpInput) return;
+
+  function setColoniaOptions(colonias, valorActual) {
+    const prevInput = document.getElementById('colonia-input');
+    const select = document.createElement('select');
+    select.id   = 'colonia-input';
+    select.name = 'colonia';
+    select.className = 'vf-inp';
+    colonias.forEach(function(nombre) {
+      const opt = document.createElement('option');
+      opt.value = nombre;
+      opt.textContent = nombre;
+      if (nombre === valorActual) opt.selected = true;
+      select.appendChild(opt);
+    });
+    if (valorActual && !colonias.includes(valorActual)) {
+      const opt = document.createElement('option');
+      opt.value = valorActual;
+      opt.textContent = valorActual;
+      opt.selected = true;
+      select.insertBefore(opt, select.firstChild);
+    }
+    coloniaWrap.replaceChild(select, prevInput);
+  }
+
+  cpInput.addEventListener('blur', function() {
+    const cp = cpInput.value.trim();
+    if (!/^\d{5}$/.test(cp)) return;
+
+    cpStatus.textContent = 'Buscando…';
+    fetch('cp_lookup.php?cp=' + encodeURIComponent(cp))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.ok) { cpStatus.textContent = ''; return; }
+        cpStatus.textContent = '';
+        if (data.ciudad || data.municipio) ciudadInput.value = data.ciudad || data.municipio;
+        if (data.estado) estadoInput.value = data.estado;
+        if (data.colonias && data.colonias.length) {
+          const colInput = document.getElementById('colonia-input');
+          setColoniaOptions(data.colonias, colInput.value);
+        }
+      })
+      .catch(function() { cpStatus.textContent = ''; });
+  });
 })();
 </script>
 </body>

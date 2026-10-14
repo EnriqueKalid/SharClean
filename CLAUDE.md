@@ -35,6 +35,7 @@ Single-tenant, solo uso interno.
 | `portal/checkin_submit.php` | Handler POST que guarda el check-in/out en `asistencia` |
 | `portal/mi_foto.php` | Sirve la foto de referencia del empleado logueado (para comparar en el navegador) |
 | `admin/asistencia_foto.php` / `admin/empleado_foto.php` | Sirven selfies de check-in y foto de referencia al admin (protegidas) |
+| `admin/cp_lookup.php` | Autocompleta Colonia/Ciudad/Estado desde el C.P. (proxy server-side a copomex.com, requiere `COPOMEX_TOKEN` en `.env`) |
 
 ## Nota crítica — mysqli sin mysqlnd
 
