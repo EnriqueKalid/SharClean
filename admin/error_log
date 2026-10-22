@@ -159,3 +159,18 @@ Stack trace:
 Stack trace:
 #0 {main}
   thrown in /home/sharclea/public_html/admin/empleados.php on line 204
+[14-Oct-2026 01:59:27 UTC] PHP Fatal error:  Uncaught TypeError: str_pad(): Argument #1 ($string) must be of type string, int given in /home/sharclea/public_html/admin/empleados.php:164
+Stack trace:
+#0 /home/sharclea/public_html/admin/empleados.php(164): str_pad()
+#1 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 164
+[14-Oct-2026 02:10:26 UTC] PHP Fatal error:  Uncaught TypeError: str_pad(): Argument #1 ($string) must be of type string, int given in /home/sharclea/public_html/admin/empleados.php:164
+Stack trace:
+#0 /home/sharclea/public_html/admin/empleados.php(164): str_pad()
+#1 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 164
+[14-Oct-2026 02:13:29 UTC] PHP Fatal error:  Uncaught TypeError: str_pad(): Argument #1 ($string) must be of type string, int given in /home/sharclea/public_html/admin/empleados.php:164
+Stack trace:
+#0 /home/sharclea/public_html/admin/empleados.php(164): str_pad()
+#1 {main}
+  thrown in /home/sharclea/public_html/admin/empleados.php on line 164

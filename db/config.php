@@ -30,6 +30,12 @@ define('DB_CHARSET', 'utf8mb4');
  */
 function getDB(): mysqli
 {
+    /* Desde PHP 8.1, mysqli lanza mysqli_sql_exception por defecto en errores
+       de query/prepare. Todo el proyecto asume el comportamiento clásico
+       (false/null en error, sin excepciones) — se restaura explícitamente
+       para no romper ese patrón tras el upgrade de PHP 8.0 a 8.4. */
+    mysqli_report(MYSQLI_REPORT_OFF);
+
     $mysqli = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
 
     if ($mysqli->connect_error) {

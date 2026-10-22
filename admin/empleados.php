@@ -161,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 /* ── INSERT – número auto ── */
                 $max    = (int)$db->query('SELECT COALESCE(MAX(id),0) FROM empleados')->fetch_row()[0];
-                $numero = 'EMP-' . str_pad($max + 1, 4, '0', STR_PAD_LEFT);
+                $numero = 'EMP-' . str_pad((string)($max + 1), 4, '0', STR_PAD_LEFT);
 
                 $s = $db->prepare(
                     'INSERT INTO empleados
@@ -190,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $s->execute();
                 $new_id = $db->insert_id;
                 /* Corregir número con ID real */
-                $final_num = 'EMP-' . str_pad($new_id, 4, '0', STR_PAD_LEFT);
+                $final_num = 'EMP-' . str_pad((string)$new_id, 4, '0', STR_PAD_LEFT);
                 $db->query("UPDATE empleados SET numero_empleado='$final_num' WHERE id=$new_id");
 
                 /* Marcar candidato como contratado */

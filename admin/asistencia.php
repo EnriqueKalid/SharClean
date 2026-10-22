@@ -554,7 +554,7 @@ input[type=text].inp-sm{width:180px;}
             <th style="position:sticky;left:0;z-index:2;background:#f8fafc;">Empleado</th>
             <th>Dept</th>
             <?php for ($d = 1; $d <= $diasEnMes; $d++): ?>
-              <?php $dow = (int)date('N', strtotime("$mes-" . str_pad($d,2,'0',STR_PAD_LEFT))); ?>
+              <?php $dow = (int)date('N', strtotime("$mes-" . str_pad((string)$d,2,'0',STR_PAD_LEFT))); ?>
               <th style="<?= in_array($dow,[6,7]) ? 'color:#94a3b8;' : '' ?>;min-width:28px;"><?= $d ?></th>
             <?php endfor; ?>
             <th>Días</th><th>Faltas</th><th>H.Extra</th>
@@ -578,7 +578,7 @@ input[type=text].inp-sm{width:180px;}
             <td style="font-size:11px;color:#94a3b8;white-space:nowrap;"><?= h($emp['dept_nombre'] ?? '—') ?></td>
             <?php for ($d = 1; $d <= $diasEnMes; $d++):
               $celda = $pivotData[$emp['id']][$d] ?? null;
-              $dow   = (int)date('N', strtotime("$mes-" . str_pad($d,2,'0',STR_PAD_LEFT)));
+              $dow   = (int)date('N', strtotime("$mes-" . str_pad((string)$d,2,'0',STR_PAD_LEFT)));
               $isWeekend = in_array($dow, [6,7]);
               if ($celda) {
                 [$bg,$clr,$lbl] = $colorMap[$celda['tipo']] ?? ['#f1f5f9','#64748b','?'];
