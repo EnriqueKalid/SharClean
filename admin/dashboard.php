@@ -114,13 +114,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f1f5f9;color:#1e
 a{color:inherit;text-decoration:none}
 
 /* Header */
-.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
-.admin-brand{display:flex;align-items:center;gap:10px}
-.admin-brand img{height:36px}
-.admin-header h1{font-size:18px;font-weight:800}
-.nav-links{display:flex;gap:4px;align-items:center}
-.nav-links a{padding:6px 12px;border-radius:6px;font-size:13px;color:rgba(255,255,255,.85);transition:background .15s}
-.nav-links a:hover,.nav-links a.active{background:rgba(255,255,255,.2);color:#fff}
 
 /* Layout */
 .body{padding:24px;max-width:1300px;margin:0 auto}
@@ -181,6 +174,7 @@ a{color:inherit;text-decoration:none}
 /* Fecha */
 .dash-fecha{font-size:13px;color:#94a3b8;margin-bottom:24px}
 </style>
+<link rel="stylesheet" href="assets/admin.css?v=2">
 </head>
 <body>
 

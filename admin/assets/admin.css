@@ -1,0 +1,167 @@
+/* ==========================================================================
+   Sharclean Admin 2.0 — layout compartido (menú lateral + barra superior)
+   Se enlaza al final del <head> de cada página, después de sus estilos propios.
+   --brand se define en _nav.php desde Configuración → Sistema → Color primario.
+   ========================================================================== */
+
+:root {
+  --brand: #0284C7;
+  --brand-soft: color-mix(in srgb, var(--brand) 11%, transparent);
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --border: #e6e9f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --sb-w: 264px;
+  --topbar-h: 60px;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+}
+html.sb-collapsed { --sb-w: 76px; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding-left: var(--sb-w);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  transition: padding-left .25s var(--ease);
+}
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* Entrada suave del contenido de cada módulo */
+body > .body { animation: page-in .28s var(--ease) both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ── Menú lateral ─────────────────────────────────────────────────────── */
+.sb {
+  position: fixed; inset: 0 auto 0 0; z-index: 50;
+  width: var(--sb-w);
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  transition: width .25s var(--ease), transform .25s var(--ease);
+  overflow: hidden;
+}
+
+.sb-user {
+  display: flex; align-items: center; gap: 12px;
+  margin: 14px 12px 6px; padding: 10px;
+  border-radius: 14px;
+  color: inherit; text-decoration: none;
+  transition: background .15s;
+}
+.sb-user:hover { background: var(--bg); }
+.sb-avatar {
+  flex: 0 0 44px; width: 44px; height: 44px;
+  border-radius: 50%; object-fit: cover;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--brand-soft);
+}
+.sb-avatar-initials {
+  display: grid; place-items: center;
+  background: var(--brand); color: #fff;
+  font-weight: 700; font-size: 15px; letter-spacing: .02em;
+}
+.sb-user-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.sb-user-text strong { font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-user-text small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.sb-nav { flex: 1; overflow-y: auto; padding: 4px 12px 12px; scrollbar-width: thin; }
+.sb-group {
+  margin: 18px 10px 6px;
+  font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase;
+  color: #94a3b8; white-space: nowrap;
+}
+
+.sb-link {
+  position: relative;
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 9px 12px; margin: 2px 0;
+  border: 0; border-radius: 10px; background: none;
+  font: inherit; font-size: 14px; font-weight: 500; text-align: left;
+  color: #334155; text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.sb-link svg { flex: 0 0 20px; width: 20px; height: 20px; }
+.sb-link:hover { background: var(--bg); color: var(--text); }
+.sb-link.active { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+.sb-link.active::before {
+  content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px;
+  width: 3px; border-radius: 0 3px 3px 0; background: var(--brand);
+}
+
+.sb-foot { padding: 8px 12px 12px; border-top: 1px solid var(--border); }
+.sb-logout:hover { background: #fef2f2; color: #dc2626; }
+.sb-brand { display: flex; align-items: center; gap: 10px; padding: 10px 6px 0 12px; }
+.sb-brand img { height: 26px; max-width: 90px; object-fit: contain; }
+.sb-brand span { flex: 1; font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-collapse {
+  display: grid; place-items: center;
+  width: 32px; height: 32px; flex: 0 0 32px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
+  color: var(--muted); cursor: pointer; transition: background .15s, transform .25s var(--ease);
+}
+.sb-collapse:hover { background: var(--bg); color: var(--text); }
+.sb-collapse svg { width: 16px; height: 16px; }
+
+/* Menú contraído (solo íconos) */
+html.sb-collapsed .sb-user { justify-content: center; margin-inline: 8px; padding-inline: 0; }
+html.sb-collapsed .sb-user-text,
+html.sb-collapsed .sb-link span,
+html.sb-collapsed .sb-brand img,
+html.sb-collapsed .sb-brand span { display: none; }
+html.sb-collapsed .sb-group { margin: 14px 8px 6px; height: 1px; background: var(--border); color: transparent; overflow: hidden; }
+html.sb-collapsed .sb-link { justify-content: center; padding-inline: 0; }
+html.sb-collapsed .sb-brand { justify-content: center; padding-left: 0; padding-right: 0; }
+html.sb-collapsed .sb-collapse { transform: rotate(180deg); }
+
+/* ── Barra superior ───────────────────────────────────────────────────── */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 12px;
+  height: var(--topbar-h); padding: 0 28px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: saturate(160%) blur(10px);
+  -webkit-backdrop-filter: saturate(160%) blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar h1 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; color: var(--text); }
+.topbar-menu {
+  display: none; place-items: center;
+  width: 38px; height: 38px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); cursor: pointer;
+}
+.topbar-menu svg { width: 20px; height: 20px; }
+
+.sb-backdrop {
+  position: fixed; inset: 0; z-index: 45;
+  background: rgba(15, 23, 42, .4);
+  opacity: 0; pointer-events: none; transition: opacity .25s var(--ease);
+}
+
+/* ── Móvil / tablet: menú deslizable ──────────────────────────────────── */
+@media (max-width: 960px) {
+  html, html.sb-collapsed { --sb-w: 280px; }
+  body { padding-left: 0; }
+  .sb { transform: translateX(-100%); }
+  html.sb-open .sb { transform: none; box-shadow: 0 10px 40px rgba(15, 23, 42, .18); }
+  html.sb-open .sb-backdrop { opacity: 1; pointer-events: auto; }
+  html.sb-open { overflow: hidden; }
+  .sb-collapse { display: none; }
+  html.sb-collapsed .sb-user-text, html.sb-collapsed .sb-link span,
+  html.sb-collapsed .sb-brand img, html.sb-collapsed .sb-brand span { display: revert; }
+  html.sb-collapsed .sb-link { justify-content: flex-start; padding-inline: 12px; }
+  html.sb-collapsed .sb-user { justify-content: flex-start; padding-inline: 10px; }
+  html.sb-collapsed .sb-group { height: auto; background: none; color: #94a3b8; margin: 18px 10px 6px; }
+  .topbar { padding: 0 16px; }
+  .topbar-menu { display: grid; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+@media print {
+  body { padding-left: 0 !important; background: #fff; }
+  .sb, .topbar, .sb-backdrop { display: none !important; }
+}

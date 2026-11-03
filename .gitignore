@@ -3,3 +3,6 @@ uploads/*
 !uploads/.htaccess
 docs/empleados_layout.pdf
 docs/empleados_layout.xlsx
+
+# Logs de PHP del servidor
+error_log

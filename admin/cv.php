@@ -32,6 +32,8 @@ $types = [
     'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 
+// La CSP del panel (auth.php) puede impedir que el visor PDF del navegador muestre el archivo
+header_remove('Content-Security-Policy');
 header('Content-Type: ' . ($types[$ext] ?? 'application/octet-stream'));
 header('Content-Disposition: inline; filename="' . $filename . '"');
 header('Content-Length: ' . filesize($path));

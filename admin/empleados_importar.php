@@ -345,12 +345,6 @@ $db->close();
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px;}
 a{color:inherit;text-decoration:none;}
-.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}.admin-brand{display:flex;align-items:center;gap:10px}.admin-brand img{height:36px}
-.admin-header h1{font-size:18px;font-weight:800;}
-.nav-links{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.nav-links a{color:rgba(255,255,255,.85);font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px;white-space:nowrap;transition:.15s}
-.nav-links a:hover{background:rgba(255,255,255,.15)}
-.nav-links a.active{background:rgba(255,255,255,.95);color:#0284C7;font-weight:700;border-color:transparent}
 .body{max-width:900px;margin:0 auto;padding:24px 16px;}
 .card{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.07);overflow:hidden;margin-bottom:20px;}
 .card-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #f1f5f9;}
@@ -379,6 +373,7 @@ input[type=file]{display:block;margin:14px 0;font-size:13px;}
 .detail-list li{margin-bottom:5px;}
 .detail-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:14px;}
 </style>
+<link rel="stylesheet" href="assets/admin.css?v=2">
 </head>
 <body>
 

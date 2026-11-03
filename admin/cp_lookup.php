@@ -2,7 +2,8 @@
 /**
  * Sharclean Admin – Autocompletar Colonia/Municipio/Estado a partir del C.P.
  * Usage: admin/cp_lookup.php?cp=56570
- * Llama a copomex.com del lado del servidor para no exponer el token en el navegador.
+ * Consulta la tabla local `codigos_postales` (catálogo SEPOMEX importado desde
+ * Configuración → Códigos postales). Sin llamadas a servicios de terceros.
  */
 
 declare(strict_types=1);
@@ -19,29 +20,28 @@ if (!preg_match('/^\d{5}$/', $cp)) {
     exit;
 }
 
-$token = $_ENV['COPOMEX_TOKEN'] ?? '';
-if ($token === '') {
+$db  = getAdminDB();
+$res = $db->query("SELECT asentamiento, municipio, estado, ciudad
+                   FROM codigos_postales WHERE cp='$cp' ORDER BY asentamiento");
+
+$colonias = [];
+$first    = null;
+if ($res) {
+    while ($row = $res->fetch_assoc()) {
+        $first ??= $row;
+        $colonias[] = $row['asentamiento'];
+    }
+}
+
+if ($first === null) {
     echo json_encode(['ok' => false]);
     exit;
 }
-
-$url = 'https://api.copomex.com/query/info_cp/' . $cp . '?token=' . urlencode($token) . '&type=simplified';
-
-$context = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true]]);
-$raw     = @file_get_contents($url, false, $context);
-$data    = $raw ? json_decode($raw, true) : null;
-
-if (!$data || !empty($data['error']) || empty($data['response'])) {
-    echo json_encode(['ok' => false]);
-    exit;
-}
-
-$r = $data['response'];
 
 echo json_encode([
-    'ok'       => true,
-    'colonias' => array_values((array)($r['asentamiento'] ?? [])),
-    'municipio' => (string)($r['municipio'] ?? ''),
-    'estado'    => (string)($r['estado'] ?? ''),
-    'ciudad'    => (string)($r['ciudad'] ?? ''),
+    'ok'        => true,
+    'colonias'  => array_values(array_unique($colonias)),
+    'municipio' => $first['municipio'],
+    'estado'    => $first['estado'],
+    'ciudad'    => $first['ciudad'],
 ]);

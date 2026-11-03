@@ -1,7 +1,10 @@
 <?php
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__ . '/../db/security.php';
+require_once __DIR__ . '/../db/csrf.php';
+startSecureSession();
+sendSecurityHeaders();
 
 if (!empty($_SESSION['admin_logged_in'])) {
     header('Location: dashboard.php');
@@ -11,6 +14,8 @@ if (!empty($_SESSION['admin_logged_in'])) {
 require_once __DIR__ . '/../db/config.php';
 
 $error = '';
+if (isset($_GET['expired']))  $error = 'Tu sesión expiró por inactividad. Inicia sesión de nuevo.';
+if (isset($_GET['disabled'])) $error = 'Tu cuenta fue desactivada. Contacta al administrador.';
 
 /* ── Detectar si hay usuarios en BD o usar fallback .env ── */
 function dbUsersExist(mysqli $db): bool
@@ -23,12 +28,40 @@ function dbUsersExist(mysqli $db): bool
     }
 }
 
+/* ── Anti fuerza bruta: máx. 5 fallos por IP+usuario y 20 por IP en 15 min ── */
+function loginBloqueado(mysqli $db, string $ip, string $user): bool
+{
+    $i = $db->real_escape_string($ip);
+    $u = $db->real_escape_string($user);
+    $r = $db->query("SELECT COUNT(*) AS por_ip, COALESCE(SUM(username='$u'),0) AS por_user
+                     FROM admin_login_intentos
+                     WHERE ip='$i' AND created_at > NOW() - INTERVAL 15 MINUTE");
+    if (!$r) return false;   // migrate_admin_v2.sql aún no ejecutada
+    $row = $r->fetch_assoc();
+    return (int)$row['por_ip'] >= 20 || (int)$row['por_user'] >= 5;
+}
+
+function registrarFallo(mysqli $db, string $ip, string $user): void
+{
+    $i = $db->real_escape_string($ip);
+    $u = $db->real_escape_string(substr($user, 0, 60));
+    $db->query("INSERT INTO admin_login_intentos (ip, username) VALUES ('$i', '$u')");
+    if (random_int(1, 50) === 1) $db->query('DELETE FROM admin_login_intentos WHERE created_at < NOW() - INTERVAL 1 DAY');
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        http_response_code(403);
+        exit('Token de seguridad inválido o vencido. Recargue la página e intente de nuevo.');
+    }
     $user = trim($_POST['user'] ?? '');
     $pass = $_POST['pass'] ?? '';
+    $ip   = (string)($_SERVER['REMOTE_ADDR'] ?? '');
     $db   = getDB();
 
-    if (dbUsersExist($db)) {
+    if (loginBloqueado($db, $ip, $user)) {
+        $error = 'Demasiados intentos fallidos. Espera 15 minutos e intenta de nuevo.';
+    } elseif (dbUsersExist($db)) {
         /* ── Autenticación por BD ── */
         $u = $db->real_escape_string($user);
         $row = $db->query(
@@ -47,6 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['admin_perfil']       = $row['perfil_nombre'];
             $_SESSION['admin_perfil_slug']  = $row['perfil_slug'];
             $_SESSION['admin_permisos']     = json_decode($row['permisos'], true) ?? [];
+            $_SESSION['admin_last_activity'] = time();
 
             $id = (int)$row['id'];
             $db->query("UPDATE admin_usuarios SET ultimo_login=NOW() WHERE id=$id");
@@ -55,18 +89,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         $error = 'Usuario o contraseña incorrectos.';
+        registrarFallo($db, $ip, $user);
     } else {
         /* ── Fallback .env (sin usuarios en BD) ── */
         $adminUser = $_ENV['ADMIN_USER'] ?? 'admin';
         $adminPass = $_ENV['ADMIN_PASS'] ?? '';
-        if (hash_equals($adminUser, $user) && hash_equals($adminPass, $pass)) {
+        if ($adminPass !== '' && hash_equals($adminUser, $user) && hash_equals($adminPass, $pass)) {
             session_regenerate_id(true);
             $_SESSION['admin_logged_in'] = true;
+            $_SESSION['admin_last_activity'] = time();
             $db->close();
             header('Location: dashboard.php');
             exit;
         }
         $error = 'Usuario o contraseña incorrectos.';
+        registrarFallo($db, $ip, $user);
     }
     if (isset($db)) $db->close();
 }
@@ -116,6 +153,7 @@ input:focus{border-color:#0284C7;box-shadow:0 0 0 3px rgba(2,132,199,.1)}
   <?php endif ?>
 
   <form method="post" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8') ?>">
     <div class="fg">
       <label for="user">Usuario</label>
       <input type="text" id="user" name="user" required autofocus autocomplete="username">

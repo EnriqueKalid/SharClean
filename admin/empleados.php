@@ -337,12 +337,6 @@ $v = fn(string $k, string $def = '') => h((string)($pre[$k] ?? $def));
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px;}
 a{color:inherit;text-decoration:none;}
-.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}.admin-brand{display:flex;align-items:center;gap:10px}.admin-brand img{height:36px}
-.admin-header h1{font-size:18px;font-weight:800;}
-.nav-links{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.nav-links a{color:rgba(255,255,255,.85);font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px;white-space:nowrap;transition:.15s}
-.nav-links a:hover{background:rgba(255,255,255,.15)}
-.nav-links a.active{background:rgba(255,255,255,.95);color:#0284C7;font-weight:700;border-color:transparent}
 .body{max-width:1400px;margin:0 auto;padding:24px 16px;}
 /* Stats */
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}
@@ -406,6 +400,7 @@ textarea.vf-inp{resize:vertical;}
 @media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr);}.vf-grid{grid-template-columns:repeat(2,1fr);}.vf-span3{grid-column:span 2;}}
 @media(max-width:580px){.stats{grid-template-columns:1fr 1fr;}.vf-grid,.vf-grid-2{grid-template-columns:1fr;}.vf-span2,.vf-span3{grid-column:1;}}
 </style>
+<link rel="stylesheet" href="assets/admin.css?v=2">
 </head>
 <body>
 
@@ -896,7 +891,7 @@ textarea.vf-inp{resize:vertical;}
     fetch('cp_lookup.php?cp=' + encodeURIComponent(cp))
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (!data.ok) { cpStatus.textContent = ''; return; }
+        if (!data.ok) { cpStatus.textContent = 'C.P. no encontrado en el catálogo'; return; }
         cpStatus.textContent = '';
         if (data.ciudad || data.municipio) ciudadInput.value = data.ciudad || data.municipio;
         if (data.estado) estadoInput.value = data.estado;

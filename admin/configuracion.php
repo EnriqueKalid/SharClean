@@ -2,6 +2,8 @@
 declare(strict_types=1);
 require_once __DIR__ . '/auth.php';
 requirePermiso('configuracion');
+require_once __DIR__ . '/../db/csrf.php';
+require_once __DIR__ . '/../db/cp_import.php';
 $db = getAdminDB();
 
 function fetchAll($result): array {
@@ -13,16 +15,39 @@ function fetchAll($result): array {
 // ── Guardar sección ───────────────────────────────────────────────────────
 $saved  = false;
 $errors = [];
+$csrf   = generateCsrfToken();
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// Importar catálogo de códigos postales (SEPOMEX)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'importar_cp') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) { http_response_code(403); exit('Token inválido.'); }
+    $f = $_FILES['cp_file'] ?? null;
+    if (!$f || $f['error'] !== UPLOAD_ERR_OK) {
+        $errors[] = ($f && in_array($f['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE]))
+            ? 'El archivo excede el tamaño máximo de subida del servidor. Suba el .zip en lugar del .txt.'
+            : 'Seleccione el archivo descargado de SEPOMEX.';
+    } else {
+        $r = importarCatalogoCP($db, $f['tmp_name']);
+        if ($r['ok']) {
+            setAppConfig('cp_catalogo_importado', date('Y-m-d H:i'));
+            header('Location: configuracion.php?tab=cp&cp_ok=' . $r['filas']);
+            exit;
+        }
+        $errors[] = $r['error'];
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($errors) && !isset($_POST['accion'])) {
     $grupo = $db->real_escape_string($_POST['grupo'] ?? '');
 
     // Subida de logo
     $logoGuardado = '';
     if (!empty($_FILES['logo_file']['name']) && $_FILES['logo_file']['error'] === UPLOAD_ERR_OK) {
-        $ext = strtolower(pathinfo($_FILES['logo_file']['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, ['png','jpg','jpeg','webp','svg'])) {
-            $errors[] = 'Formato de logo no permitido. Use PNG, JPG, WEBP o SVG.';
+        // Extensión según el contenido real del archivo, no según su nombre.
+        // SVG no se acepta: puede contener JavaScript (XSS).
+        $info = @getimagesize($_FILES['logo_file']['tmp_name']);
+        $ext  = [IMAGETYPE_PNG => 'png', IMAGETYPE_JPEG => 'jpg', IMAGETYPE_WEBP => 'webp'][$info[2] ?? 0] ?? '';
+        if ($ext === '') {
+            $errors[] = 'Formato de logo no permitido. Use PNG, JPG o WEBP.';
         } elseif ($_FILES['logo_file']['size'] > 2 * 1024 * 1024) {
             $errors[] = 'El logo no debe superar 2 MB.';
         } else {
@@ -39,11 +64,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         // Cargar todos los campos del grupo
-        $campos = fetchAll($db->query("SELECT clave FROM config WHERE grupo='$grupo'"));
+        $campos = fetchAll($db->query("SELECT clave, tipo FROM config WHERE grupo='$grupo'"));
         foreach ($campos as $c) {
             $clave = $c['clave'];
             if ($clave === 'sistema_logo' && $logoGuardado !== '') {
                 $val = $logoGuardado;
+            } elseif ($c['tipo'] === 'password' && trim($_POST[$clave] ?? '') === '') {
+                continue;   // en blanco = conservar la contraseña actual
+            } elseif ($clave === 'sistema_color' && !preg_match('/^#[0-9a-fA-F]{6}$/', trim($_POST[$clave] ?? ''))) {
+                continue;   // solo colores hex válidos (se imprimen dentro de <style>)
             } elseif (isset($_POST[$clave])) {
                 $val = trim($_POST[$clave]);
             } else {
@@ -61,8 +90,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ── Cargar config ─────────────────────────────────────────────────────────
-$tab = in_array($_GET['tab'] ?? '', ['empresa','correo','sistema']) ? $_GET['tab'] : 'empresa';
+$tab = in_array($_GET['tab'] ?? '', ['empresa','correo','sistema','cp']) ? $_GET['tab'] : 'empresa';
+if (isset($_POST['accion']) && $_POST['accion'] === 'importar_cp') $tab = 'cp';
 $savedMsg = isset($_GET['saved']);
+
+if ($tab === 'cp') {
+    $res = $db->query('SELECT COUNT(*) AS n, COUNT(DISTINCT cp) AS cps FROM codigos_postales');
+    $cpStats = $res ? $res->fetch_assoc() : null;   // null = tabla aún no migrada
+}
 
 $rows_empresa = fetchAll($db->query("SELECT * FROM config WHERE grupo='empresa' ORDER BY orden"));
 $rows_correo  = fetchAll($db->query("SELECT * FROM config WHERE grupo='correo'  ORDER BY orden"));
@@ -78,11 +113,6 @@ $rows_sistema = fetchAll($db->query("SELECT * FROM config WHERE grupo='sistema' 
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#1e293b;font-size:14px}
 a{color:inherit;text-decoration:none}
-.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}.admin-brand{display:flex;align-items:center;gap:10px}.admin-brand img{height:36px}
-.admin-header h1{font-size:18px;font-weight:800}
-.nav-links{display:flex;gap:4px;align-items:center}
-.nav-links a{padding:6px 12px;border-radius:6px;font-size:13px;color:rgba(255,255,255,.85);transition:background .15s}
-.nav-links a:hover,.nav-links a.active{background:rgba(255,255,255,.2);color:#fff}
 .body{padding:24px;max-width:860px;margin:0 auto}
 /* Tabs */
 .tabs{display:flex;gap:2px;border-bottom:2px solid #e2e8f0;margin-bottom:28px}
@@ -115,6 +145,7 @@ a{color:inherit;text-decoration:none}
 .pass-wrap input{padding-right:44px}
 .pass-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;line-height:1}
 </style>
+<link rel="stylesheet" href="assets/admin.css?v=2">
 </head>
 <body>
 
@@ -133,6 +164,7 @@ a{color:inherit;text-decoration:none}
     <button class="tab-btn <?= $tab==='empresa'?'active':'' ?>" onclick="location.href='?tab=empresa'">🏢 Empresa</button>
     <button class="tab-btn <?= $tab==='correo'?'active':'' ?>"  onclick="location.href='?tab=correo'">📧 Correo</button>
     <button class="tab-btn <?= $tab==='sistema'?'active':'' ?>" onclick="location.href='?tab=sistema'">🎨 Sistema</button>
+    <button class="tab-btn <?= $tab==='cp'?'active':'' ?>"      onclick="location.href='?tab=cp'">📮 Códigos postales</button>
   </div>
 
   <?php
@@ -149,7 +181,8 @@ a{color:inherit;text-decoration:none}
 
     if ($tipo === 'password') {
       echo '<div class="pass-wrap">';
-      echo '<input type="password" id="'.h($clave).'" name="'.h($clave).'" value="'.h($val).'" autocomplete="new-password">';
+      // Nunca se imprime la contraseña guardada en el HTML; en blanco = conservarla
+      echo '<input type="password" id="'.h($clave).'" name="'.h($clave).'" value="" placeholder="'.($val !== '' ? '•••••••• (guardada)' : '').'" autocomplete="new-password">';
       echo '<button type="button" class="pass-toggle" onclick="togglePass(\''.h($clave).'\')">👁</button>';
       echo '</div>';
       echo '<span class="field-hint">Déjelo en blanco para no modificar la contraseña.</span>';
@@ -168,6 +201,7 @@ a{color:inherit;text-decoration:none}
   <?php if ($tab === 'empresa'): ?>
   <form method="post" enctype="multipart/form-data">
     <input type="hidden" name="grupo" value="empresa">
+    <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
     <div class="card">
       <div class="card-title">Identidad de la empresa</div>
       <div class="field-grid">
@@ -188,6 +222,7 @@ a{color:inherit;text-decoration:none}
   <?php elseif ($tab === 'correo'): ?>
   <form method="post">
     <input type="hidden" name="grupo" value="correo">
+    <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
     <div class="card">
       <div class="card-title">Correo electrónico</div>
       <p style="font-size:13px;color:#64748b;margin-bottom:20px;line-height:1.6">
@@ -205,6 +240,7 @@ a{color:inherit;text-decoration:none}
   <?php elseif ($tab === 'sistema'): ?>
   <form method="post" enctype="multipart/form-data">
     <input type="hidden" name="grupo" value="sistema">
+    <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
     <div class="card">
       <div class="card-title">Apariencia y nombre del sistema</div>
 
@@ -220,9 +256,9 @@ a{color:inherit;text-decoration:none}
       </div>
       <div class="field">
         <label for="logo_file">Subir nuevo logo</label>
-        <input type="file" id="logo_file" name="logo_file" accept=".png,.jpg,.jpeg,.webp,.svg"
+        <input type="file" id="logo_file" name="logo_file" accept=".png,.jpg,.jpeg,.webp"
                onchange="previewLogo(this)">
-        <span class="field-hint">PNG, JPG, WEBP o SVG · Máx. 2 MB · Recomendado: fondo transparente</span>
+        <span class="field-hint">PNG, JPG o WEBP · Máx. 2 MB · Recomendado: fondo transparente</span>
       </div>
 
       <?php foreach ($rows_sistema as $r): if ($r['clave'] === 'sistema_logo') continue; renderField($r); endforeach ?>
@@ -231,6 +267,46 @@ a{color:inherit;text-decoration:none}
       <button type="submit" class="btn btn-primary">Guardar sistema</button>
     </div>
   </form>
+
+  <!-- ═══ CÓDIGOS POSTALES ═════════════════════════════════════════════════ -->
+  <?php elseif ($tab === 'cp'): ?>
+  <?php if (isset($_GET['cp_ok'])): ?>
+    <div class="alert alert-success">✓ Catálogo importado: <?= number_format((int)$_GET['cp_ok']) ?> registros.</div>
+  <?php endif ?>
+  <div class="card">
+    <div class="card-title">Catálogo Nacional de Códigos Postales</div>
+    <?php if ($cpStats === null): ?>
+      <div class="alert alert-error">La tabla <code>codigos_postales</code> no existe. Ejecute primero <code>db/migrate_codigos_postales_v1.sql</code>.</div>
+    <?php else: ?>
+      <p style="margin-bottom:6px">
+        <strong><?= number_format((int)$cpStats['n']) ?></strong> asentamientos en
+        <strong><?= number_format((int)$cpStats['cps']) ?></strong> códigos postales.
+      </p>
+      <p class="field-hint" style="margin-bottom:20px">
+        Última importación: <?= appConfig('cp_catalogo_importado') !== '' ? h(appConfig('cp_catalogo_importado')) : 'nunca' ?>.
+        Se usa para autollenar Colonia, Ciudad y Estado al capturar el C.P. de un empleado.
+      </p>
+    <?php endif ?>
+
+    <form method="post" enctype="multipart/form-data"
+          onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Importando… (puede tardar un minuto)'">
+      <input type="hidden" name="accion" value="importar_cp">
+      <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+      <div class="field">
+        <label for="cp_file">Archivo de SEPOMEX</label>
+        <input type="file" id="cp_file" name="cp_file" accept=".zip,.txt" required>
+        <span class="field-hint">
+          Descárguelo en <a href="https://www.correosdemexico.gob.mx/SSLServicios/ConsultaCP/CodigoPostal_Exportar.aspx"
+          target="_blank" rel="noopener" style="color:#0284C7;text-decoration:underline">Correos de México</a>
+          eligiendo <em>Todos</em> los estados y formato <em>TXT</em>. Suba el .zip tal cual o el CPdescarga.txt.
+          La importación reemplaza el catálogo completo.
+        </span>
+      </div>
+      <div style="display:flex;justify-content:flex-end">
+        <button type="submit" class="btn btn-primary" <?= $cpStats === null ? 'disabled' : '' ?>>Importar catálogo</button>
+      </div>
+    </form>
+  </div>
   <?php endif ?>
 
 </div>

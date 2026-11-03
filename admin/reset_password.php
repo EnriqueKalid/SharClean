@@ -5,6 +5,8 @@
  */
 declare(strict_types=1);
 
+require_once __DIR__ . '/../db/security.php';
+sendSecurityHeaders();   // incluye Referrer-Policy: el token de la URL no se filtra a otros sitios
 require_once __DIR__ . '/../db/config.php';
 require_once __DIR__ . '/../db/app_config.php';
 
@@ -46,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid) {
         $uid  = (int)$tokenRow['user_id'];
         $rid  = (int)$tokenRow['id'];
 
-        $db->query("UPDATE admin_usuarios SET password_hash='$hash', activo=1 WHERE id=$uid");
+        $db->query("UPDATE admin_usuarios SET password_hash='$hash' WHERE id=$uid");
         $db->query("UPDATE admin_reset_tokens SET used=1 WHERE id=$rid");
         $done = true;
     }
@@ -54,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid) {
 
 $empresa = appConfig('empresa_nombre', 'Sharclean');
 $color   = appConfig('sistema_color',  '#0284C7');
+if (!preg_match('/^#[0-9a-fA-F]{6}$/', $color)) $color = '#0284C7';   // se imprime dentro de <style>
 ?>
 <!DOCTYPE html>
 <html lang="es">

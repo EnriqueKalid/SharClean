@@ -6,6 +6,8 @@
  */
 declare(strict_types=1);
 
+require_once __DIR__ . '/../db/security.php';
+sendSecurityHeaders();
 require_once __DIR__ . '/../db/config.php';
 require_once __DIR__ . '/../db/app_config.php';
 

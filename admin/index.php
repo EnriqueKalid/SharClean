@@ -41,11 +41,7 @@ function fetchAll($result): array {
     return $rows;
 }
 function publicSiteUrl(string $path): string {
-    $scheme   = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $host     = $_SERVER['HTTP_HOST'] ?? 'sharclean.com.mx';
-    $adminDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/admin/index.php'));
-    $siteRoot = rtrim(preg_replace('#/admin$#', '', $adminDir), '/');
-    return $scheme . '://' . $host . $siteRoot . '/' . ltrim($path, '/');
+    return appBaseUrl() . '/' . ltrim($path, '/');   // APP_URL del .env (ver db/security.php)
 }
 
 /* ── Handle POST actions ──────────────────────────────────── */
@@ -222,12 +218,6 @@ function actionForm(string $action, int $id, string $tab, string $csrf, string $
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px;}
 a{color:inherit;text-decoration:none;}
-.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}.admin-brand{display:flex;align-items:center;gap:10px}.admin-brand img{height:36px}
-.admin-header h1{font-size:18px;font-weight:800;}
-.nav-links{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.nav-links a{color:rgba(255,255,255,.85);font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px;white-space:nowrap;transition:.15s}
-.nav-links a:hover{background:rgba(255,255,255,.15)}
-.nav-links a.active{background:rgba(255,255,255,.95);color:#0284C7;font-weight:700;border-color:transparent}
 .body{max-width:1280px;margin:0 auto;padding:24px 16px;}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}
 .stat{background:#fff;border-radius:10px;padding:20px 24px;box-shadow:0 1px 3px rgba(0,0,0,.07);}
@@ -307,6 +297,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
 .filter-bar label{font-size:12px;font-weight:600;color:#64748b;white-space:nowrap;}
 .filter-bar select{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-size:12px;background:#fff;}
 </style>
+<link rel="stylesheet" href="assets/admin.css?v=2">
 </head>
 <body>
 

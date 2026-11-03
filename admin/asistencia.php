@@ -243,12 +243,6 @@ $nextMes    = date('Y-m', strtotime($mes_ini . ' +1 month'));
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px;}
 a{color:inherit;text-decoration:none;}
-.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}.admin-brand{display:flex;align-items:center;gap:10px}.admin-brand img{height:36px}
-.admin-header h1{font-size:18px;font-weight:800;}
-.nav-links{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.nav-links a{color:rgba(255,255,255,.85);font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px;white-space:nowrap;transition:.15s}
-.nav-links a:hover{background:rgba(255,255,255,.15)}
-.nav-links a.active{background:rgba(255,255,255,.95);color:#0284C7;font-weight:700;border-color:transparent}
 .body{max-width:1500px;margin:0 auto;padding:20px 16px;}
 /* Stats */
 .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px;}
@@ -314,6 +308,7 @@ input[type=text].inp-sm{width:180px;}
 @media(max-width:900px){.stats{grid-template-columns:repeat(3,1fr);}.inc-grid{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:580px){.stats{grid-template-columns:repeat(2,1fr);}}
 </style>
+<link rel="stylesheet" href="assets/admin.css?v=2">
 </head>
 <body>
 

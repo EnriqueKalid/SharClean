@@ -13,6 +13,7 @@ function fetchAll($result): array {
 function h($s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
 $me    = adminUser();
+$csrf  = generateCsrfToken();
 $saved = false;
 $errors= [];
 $tab   = in_array($_GET['tab'] ?? '', ['usuarios','perfiles']) ? $_GET['tab'] : 'usuarios';
@@ -21,6 +22,17 @@ $tab   = in_array($_GET['tab'] ?? '', ['usuarios','perfiles']) ? $_GET['tab'] : 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $act      = $_POST['action']   ?? '';
     $uid      = (int)($_POST['uid'] ?? 0);
+
+    // Solo un super_admin puede crear o modificar cuentas super_admin
+    // (el formulario oculta la opción; aquí se hace cumplir del lado del servidor)
+    $esSuper = $me['slug'] === 'super_admin';
+    if (!$esSuper && $uid > 0) {
+        $tgt = $db->query("SELECT p.slug FROM admin_usuarios u JOIN admin_perfiles p ON p.id=u.perfil_id WHERE u.id=$uid LIMIT 1");
+        if ((($tgt ? $tgt->fetch_assoc() : null)['slug'] ?? '') === 'super_admin') {
+            http_response_code(403);
+            exit('No autorizado para modificar una cuenta de Super Administrador.');
+        }
+    }
 
     if ($act === 'save_user') {
         $nombre   = trim($_POST['nombre']    ?? '');
@@ -37,6 +49,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activo = isset($_POST['activo']) ? 1 : 0;
         }
 
+        $pSlug = $db->query("SELECT slug FROM admin_perfiles WHERE id=$perfil_id LIMIT 1");
+        $pSlug = $pSlug ? ($pSlug->fetch_assoc()['slug'] ?? null) : null;
+        if ($pSlug === null) $errors[] = 'Perfil no válido.';
+        elseif ($pSlug === 'super_admin' && !$esSuper) $errors[] = 'Solo un Super Administrador puede asignar ese perfil.';
+        if ($email !== null && !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'El email no es válido.';
         if (!$nombre || !$username) $errors[] = 'Nombre y usuario son obligatorios.';
         if (strlen($username) < 3)  $errors[] = 'El usuario debe tener al menos 3 caracteres.';
         if (!$uid && strlen($pass) < 8) $errors[] = 'La contraseña debe tener al menos 8 caracteres.';
@@ -83,6 +100,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($act === 'delete_user' && $uid > 0 && $uid !== $me['id']) {
+        $fr = $db->query("SELECT foto FROM admin_usuarios WHERE id=$uid LIMIT 1");
+        $f  = basename((string)(($fr ? $fr->fetch_assoc() : null)['foto'] ?? ''));
+        if ($f !== '' && is_file(__DIR__ . '/../uploads/usuarios/' . $f)) unlink(__DIR__ . '/../uploads/usuarios/' . $f);
         $db->query("DELETE FROM admin_usuarios WHERE id=$uid");
         header('Location: usuarios.php?tab=usuarios'); exit;
     }
@@ -99,10 +119,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $t = $db->real_escape_string($token);
         $db->query("INSERT INTO admin_reset_tokens (user_id, token, expires_at) VALUES ($uid, '$t', '$expires')");
 
-        $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http')
-                 . '://' . $_SERVER['HTTP_HOST']
-                 . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
-        $link = $baseUrl . '/reset_password.php?token=' . urlencode($token);
+        // APP_URL (.env) en lugar del Host de la petición: evita enlaces de reseteo hacia dominios falsos
+        $link = appBaseUrl() . '/admin/reset_password.php?token=' . urlencode($token);
 
         $nombre = h($row['nombre']);
         $html   = emailLayout('Restablecer contraseña', <<<HTML
@@ -133,12 +151,13 @@ if ($editUid > 0) {
     $editRow = $db->query("SELECT * FROM admin_usuarios WHERE id=$editUid LIMIT 1")->fetch_assoc();
 }
 
-$usuarios = fetchAll($db->query(
-    "SELECT u.id, u.nombre, u.username, u.email, u.activo, u.ultimo_login, p.nombre AS perfil, p.slug AS perfil_slug
+$sqlUsuarios = "SELECT u.id, u.nombre, u.username, u.email, u.activo, u.ultimo_login, %s p.nombre AS perfil, p.slug AS perfil_slug
      FROM admin_usuarios u
      JOIN admin_perfiles p ON p.id = u.perfil_id
-     ORDER BY u.id"
-));
+     ORDER BY u.id";
+$res = $db->query(sprintf($sqlUsuarios, 'u.foto,'));
+if ($res === false) $res = $db->query(sprintf($sqlUsuarios, ''));   // migrate_admin_v2.sql aún no ejecutada
+$usuarios = fetchAll($res);
 
 $perfiles = fetchAll($db->query("SELECT * FROM admin_perfiles ORDER BY id"));
 
@@ -165,11 +184,6 @@ $PERMISOS_LABELS = [
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#1e293b;font-size:14px}
 a{color:inherit;text-decoration:none}
-.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}.admin-brand{display:flex;align-items:center;gap:10px}.admin-brand img{height:36px}
-.admin-header h1{font-size:18px;font-weight:800}
-.nav-links{display:flex;gap:4px;align-items:center}
-.nav-links a{padding:6px 12px;border-radius:6px;font-size:13px;color:rgba(255,255,255,.85);transition:background .15s}
-.nav-links a:hover,.nav-links a.active{background:rgba(255,255,255,.2);color:#fff}
 .body{padding:24px;max-width:1100px;margin:0 auto}
 /* Tabs */
 .tabs{display:flex;gap:2px;border-bottom:2px solid #e2e8f0;margin-bottom:24px}
@@ -216,7 +230,10 @@ tr:hover td{background:#f8fafc}
 .alert-error{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
 .no-data{padding:48px;text-align:center;color:#94a3b8;font-size:13px}
 .me-badge{font-size:10px;background:#fef9c3;color:#854d0e;padding:1px 5px;border-radius:4px;margin-left:4px}
+.u-name{display:inline-flex;align-items:center;gap:10px}
+.u-av{width:30px;height:30px;border-radius:50%;object-fit:cover;flex:0 0 30px;display:inline-grid;place-items:center;background:#e0f2fe;color:#0369a1;font-weight:700;font-size:12px;text-transform:uppercase}
 </style>
+<link rel="stylesheet" href="assets/admin.css?v=2">
 </head>
 <body>
 <?php
@@ -258,6 +275,7 @@ require __DIR__ . '/_nav.php';
       <a href="?tab=usuarios" class="btn btn-outline btn-sm">✕ Cancelar</a>
     </div>
     <form method="post" class="form-wrap">
+      <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
       <input type="hidden" name="action" value="save_user">
       <input type="hidden" name="uid" value="<?= $editUid ?>">
       <div class="form-grid" style="margin-bottom:16px">
@@ -327,8 +345,15 @@ require __DIR__ . '/_nav.php';
         <tr>
           <td><?= $u['id'] ?></td>
           <td>
-            <?= h($u['nombre']) ?>
-            <?php if ($isMe): ?><span class="me-badge">Tú</span><?php endif ?>
+            <span class="u-name">
+              <?php if (!empty($u['foto'])): ?>
+                <img class="u-av" src="usuario_foto.php?id=<?= (int)$u['id'] ?>&amp;v=<?= substr(md5($u['foto']), 0, 8) ?>" alt="">
+              <?php else: ?>
+                <span class="u-av"><?= h(function_exists('mb_substr') ? mb_substr($u['nombre'], 0, 1) : substr($u['nombre'], 0, 1)) ?></span>
+              <?php endif ?>
+              <?= h($u['nombre']) ?>
+              <?php if ($isMe): ?><span class="me-badge">Tú</span><?php endif ?>
+            </span>
           </td>
           <td style="font-family:monospace;font-size:13px"><?= h($u['username']) ?></td>
           <td><?= $u['email'] ? h($u['email']) : '<span style="color:#94a3b8">—</span>' ?></td>
@@ -349,7 +374,8 @@ require __DIR__ . '/_nav.php';
             <div class="btn-grp">
               <a href="?tab=usuarios&edit=<?= $u['id'] ?>" class="btn btn-outline btn-sm">Editar</a>
               <?php if ($u['email']): ?>
-              <form method="post" style="display:inline" onsubmit="return confirm('¿Enviar correo de reseteo de contraseña a <?= h($u['email']) ?>?')">
+              <form method="post" style="display:inline" onsubmit="return confirm(<?= h(json_encode('¿Enviar correo de reseteo de contraseña a ' . $u['email'] . '?', JSON_HEX_QUOT | JSON_HEX_APOS | JSON_HEX_TAG | JSON_HEX_AMP)) ?>)">
+                <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
                 <input type="hidden" name="action" value="send_reset">
                 <input type="hidden" name="uid" value="<?= $u['id'] ?>">
                 <button type="submit" class="btn btn-outline btn-sm" title="Enviar enlace de reseteo por correo">🔑 Resetear</button>
@@ -357,6 +383,7 @@ require __DIR__ . '/_nav.php';
               <?php endif ?>
               <?php if (!$isMe): ?>
               <form method="post" style="display:inline" onsubmit="return confirm('<?= $u['activo'] ? '¿Desactivar este usuario?' : '¿Activar este usuario?' ?>')">
+                <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
                 <input type="hidden" name="action" value="toggle_activo">
                 <input type="hidden" name="uid" value="<?= $u['id'] ?>">
                 <button type="submit" class="btn btn-outline btn-sm">
@@ -364,6 +391,7 @@ require __DIR__ . '/_nav.php';
                 </button>
               </form>
               <form method="post" style="display:inline" onsubmit="return confirm('¿Eliminar definitivamente este usuario?')">
+                <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
                 <input type="hidden" name="action" value="delete_user">
                 <input type="hidden" name="uid" value="<?= $u['id'] ?>">
                 <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>

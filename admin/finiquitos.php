@@ -321,12 +321,6 @@ if ($view === 'list') {
 :root{--primary:#0284C7;--primary-dark:#0369A1;--danger:#DC2626;--success:#16A34A;--warn:#D97706;--gray:#64748B;--light:#F8FAFC;--border:#E2E8F0;--radius:8px;--shadow:0 1px 3px rgba(0,0,0,.1)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px}
-.admin-header{background:#0284C7;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}.admin-brand{display:flex;align-items:center;gap:10px}.admin-brand img{height:36px}
-.admin-header h1{font-size:18px;font-weight:800}
-.nav-links{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.nav-links a{color:rgba(255,255,255,.85);font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px;white-space:nowrap;transition:.15s}
-.nav-links a:hover{background:rgba(255,255,255,.15)}
-.nav-links a.active{background:rgba(255,255,255,.95);color:#0284C7;font-weight:700;border-color:transparent}
 .container{max-width:1200px;margin:24px auto;padding:0 16px}
 .card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px;box-shadow:var(--shadow)}
 .card-title{font-size:16px;font-weight:600;margin-bottom:16px;color:#0f172a}
@@ -383,6 +377,7 @@ textarea{resize:vertical;min-height:80px}
   .firma-box{text-align:center;border-top:1px solid #000;padding-top:8px;font-size:9pt}
 }
 </style>
+<link rel="stylesheet" href="assets/admin.css?v=2">
 </head>
 <body>
 
@@ -736,6 +731,7 @@ $tipoClass = $fin['tipo'] === 'liquidacion' ? 'tipo-liq' : 'tipo-fin';
 </div><!-- /container -->
 
 <script>
+const CSRF_TOKEN = <?= json_encode(generateCsrfToken()) ?>;
 <?php if ($view === 'crear'): ?>
 /* ── CREAR view JS ──────────────────────────────────────────── */
 let calcData = null;
@@ -754,6 +750,7 @@ async function calcularFiniquito() {
   btn.disabled = true; btn.textContent = 'Calculando...';
 
   const fd = new FormData();
+  fd.append('csrf_token', CSRF_TOKEN);
   fd.append('action', 'calcular');
   fd.append('empleado_id', eid);
   fd.append('fecha_termino', ft);
@@ -827,6 +824,7 @@ async function guardarFiniquito() {
   btn.disabled = true; btn.textContent = 'Guardando...';
 
   const fd = new FormData();
+  fd.append('csrf_token', CSRF_TOKEN);
   fd.append('action', 'guardar');
   fd.append('empleado_id', document.getElementById('empleado_id').value);
   fd.append('fecha_termino', document.getElementById('fecha_termino').value);
@@ -854,6 +852,7 @@ const finId = <?= (int)$fin['id'] ?>;
 async function accion(actionName) {
   if (!confirm('¿Confirmas esta acción?')) return;
   const fd = new FormData();
+  fd.append('csrf_token', CSRF_TOKEN);
   fd.append('action', actionName);
   fd.append('id', finId);
   const res  = await fetch('finiquitos.php', { method: 'POST', body: fd });
@@ -869,6 +868,7 @@ async function accionPagar() {
   const fp = document.getElementById('fechaPagoInput').value;
   if (!fp) return;
   const fd = new FormData();
+  fd.append('csrf_token', CSRF_TOKEN);
   fd.append('action', 'marcar_pagado');
   fd.append('id', finId);
   fd.append('fecha_pago', fp);
@@ -880,6 +880,7 @@ async function accionPagar() {
 async function eliminar() {
   if (!confirm('¿Eliminar este borrador? Esta acción no se puede deshacer.')) return;
   const fd = new FormData();
+  fd.append('csrf_token', CSRF_TOKEN);
   fd.append('action', 'eliminar');
   fd.append('id', finId);
   const res  = await fetch('finiquitos.php', { method: 'POST', body: fd });

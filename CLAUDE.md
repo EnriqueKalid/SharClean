@@ -35,7 +35,28 @@ Single-tenant, solo uso interno.
 | `portal/checkin_submit.php` | Handler POST que guarda el check-in/out en `asistencia` |
 | `portal/mi_foto.php` | Sirve la foto de referencia del empleado logueado (para comparar en el navegador) |
 | `admin/asistencia_foto.php` / `admin/empleado_foto.php` | Sirven selfies de check-in y foto de referencia al admin (protegidas) |
-| `admin/cp_lookup.php` | Autocompleta Colonia/Ciudad/Estado desde el C.P. (proxy server-side a copomex.com, requiere `COPOMEX_TOKEN` en `.env`) |
+| `admin/cp_lookup.php` | Autocompleta Colonia/Ciudad/Estado desde el C.P. consultando la tabla local `codigos_postales` |
+| `db/cp_import.php` | `importarCatalogoCP()` — carga el catálogo SEPOMEX (.zip/.txt) a `codigos_postales`; se usa desde Configuración → Códigos postales. Los datos NO van en el repo (licencia SEPOMEX prohíbe redistribuir) |
+| `admin/_nav.php` + `admin/assets/admin.css` | Admin 2.0: menú lateral (foto del usuario arriba a la izquierda, contraíble, deslizable en móvil) + barra superior. Cada página enlaza `assets/admin.css` al final de su `<head>` |
+| `admin/mi_perfil.php` | El usuario sube/quita su foto de perfil (cualquier usuario autenticado) |
+| `admin/usuario_foto.php` | Sirve la foto de un usuario admin (la propia, u otras con permiso `usuarios`) |
+| `db/security.php` | `startSecureSession()`, `sendSecurityHeaders()` (CSP, anti-clickjacking), `appBaseUrl()` (usa `APP_URL` del `.env`) |
+| `db/foto_upload.php` | `procesarFotoPerfil()` — valida firma real de la imagen y la re-codifica con GD (quita EXIF/payloads) |
+
+## Reglas de seguridad del panel (Admin 2.0)
+
+- `admin/auth.php` aplica a TODO el panel: sesión segura, cabeceras de seguridad, cierre por
+  inactividad (2 h), revalidación del usuario en cada petición (desactivado → fuera) y **CSRF
+  obligatorio en todo POST** (campo `csrf_token` o cabecera `X-CSRF-Token`). Todo formulario POST
+  nuevo debe incluir `<input type="hidden" name="csrf_token" value="<?= h(generateCsrfToken()) ?>">`
+  y todo `fetch` POST debe mandar el token.
+- Archivos subidos: siempre en `uploads/` (bloqueado por `.htaccess`), nombre aleatorio, tipo
+  validado por contenido real (`getimagesize`), servidos solo por scripts con `auth.php`. Nunca SVG.
+- Texto dentro de JS inline (`onclick="confirm('…')"`): usar `h(json_encode($txt, JSON_HEX_QUOT|JSON_HEX_APOS|JSON_HEX_TAG|JSON_HEX_AMP))`,
+  no `h()` solo (el navegador decodifica las entidades antes de ejecutar el JS).
+- Enlaces en correos: `appBaseUrl()`, nunca `$_SERVER['HTTP_HOST']`. Definir `APP_URL` en el `.env` del servidor.
+- Solo un `super_admin` puede crear/modificar cuentas `super_admin` (validado en servidor en `usuarios.php`).
+- Login: máx. 5 fallos por IP+usuario / 20 por IP en 15 min (`admin_login_intentos`).
 
 ## Nota crítica — mysqli sin mysqlnd
 
@@ -88,6 +109,8 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 8. `db/migrate_usuarios_v1.sql` ✅
 9. `db/migrate_reset_tokens_v1.sql` ✅
 10. `db/migrate_checkin_v1.sql` ⏳ pendiente de ejecutar en servidor (`sharclea_dbapp`)
+11. `db/migrate_codigos_postales_v1.sql` ⏳ pendiente — luego importar el catálogo desde Configuración → Códigos postales
+12. `db/migrate_admin_v2.sql` ⏳ pendiente (columna `admin_usuarios.foto` + tabla `admin_login_intentos`)
 
 ## Estado de módulos RRHH
 
