@@ -120,5 +120,19 @@ $_groups = [
   document.getElementById('sb-open').addEventListener('click', open);
   document.getElementById('sb-backdrop').addEventListener('click', close);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+
+  // Tablas anchas: envolver en un contenedor con scroll horizontal, salvo las que ya tienen uno
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.body table').forEach(function (t) {
+      for (let el = t.parentElement; el && !el.classList.contains('body'); el = el.parentElement) {
+        const ox = getComputedStyle(el).overflowX;
+        if (ox === 'auto' || ox === 'scroll') return;
+      }
+      const wrap = document.createElement('div');
+      wrap.className = 'tbl-scroll';
+      t.parentNode.insertBefore(wrap, t);
+      wrap.appendChild(t);
+    });
+  });
 })();
 </script>

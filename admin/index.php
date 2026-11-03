@@ -297,7 +297,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
 .filter-bar label{font-size:12px;font-weight:600;color:#64748b;white-space:nowrap;}
 .filter-bar select{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-size:12px;background:#fff;}
 </style>
-<link rel="stylesheet" href="assets/admin.css?v=2">
+<link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 

@@ -6,3 +6,7 @@ docs/empleados_layout.xlsx
 
 # Logs de PHP del servidor
 error_log
+
+# Logo subido desde Configuración (vive solo en el servidor)
+images/brand/*
+!images/brand/.htaccess

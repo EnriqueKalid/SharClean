@@ -373,7 +373,7 @@ input[type=file]{display:block;margin:14px 0;font-size:13px;}
 .detail-list li{margin-bottom:5px;}
 .detail-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:14px;}
 </style>
-<link rel="stylesheet" href="assets/admin.css?v=2">
+<link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 

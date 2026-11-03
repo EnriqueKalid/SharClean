@@ -400,7 +400,7 @@ textarea.vf-inp{resize:vertical;}
 @media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr);}.vf-grid{grid-template-columns:repeat(2,1fr);}.vf-span3{grid-column:span 2;}}
 @media(max-width:580px){.stats{grid-template-columns:1fr 1fr;}.vf-grid,.vf-grid-2{grid-template-columns:1fr;}.vf-span2,.vf-span3{grid-column:1;}}
 </style>
-<link rel="stylesheet" href="assets/admin.css?v=2">
+<link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 

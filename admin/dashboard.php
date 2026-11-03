@@ -174,7 +174,7 @@ a{color:inherit;text-decoration:none}
 /* Fecha */
 .dash-fecha{font-size:13px;color:#94a3b8;margin-bottom:24px}
 </style>
-<link rel="stylesheet" href="assets/admin.css?v=2">
+<link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 

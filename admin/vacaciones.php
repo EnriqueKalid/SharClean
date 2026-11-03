@@ -227,7 +227,7 @@ tr:hover td{background:#fafbfc}
 #toast.ok{background:#dcfce7;color:#166534}
 #toast.err{background:#fee2e2;color:#991b1b}
 </style>
-<link rel="stylesheet" href="assets/admin.css?v=2">
+<link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 

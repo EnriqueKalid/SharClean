@@ -346,7 +346,7 @@ tr:hover td{background:#f8fafc}
 .dept-card .row-stat:last-child{border:none;font-weight:700}
 .no-data{padding:48px;text-align:center;color:#94a3b8;font-size:13px}
 </style>
-<link rel="stylesheet" href="assets/admin.css?v=2">
+<link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 

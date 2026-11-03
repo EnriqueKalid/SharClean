@@ -1,0 +1,11 @@
+# Logo del sistema (público). Solo se sirven imágenes; cualquier otro archivo se bloquea.
+# Sintaxis dual compatible Apache 2.2 / 2.4
+<FilesMatch "^(?!.*\.(png|jpe?g|webp)$).+$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

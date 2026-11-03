@@ -554,7 +554,7 @@ select.inp{cursor:pointer;background:#fff}
 .periodo-row{display:grid;grid-template-columns:120px 180px 1fr 1fr 1fr 140px 130px;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid #f1f5f9}
 .periodo-row:hover{background:#f8fafc}
 </style>
-<link rel="stylesheet" href="assets/admin.css?v=2">
+<link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 

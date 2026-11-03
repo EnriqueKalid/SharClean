@@ -4,6 +4,7 @@ require_once __DIR__ . '/auth.php';
 requirePermiso('configuracion');
 require_once __DIR__ . '/../db/csrf.php';
 require_once __DIR__ . '/../db/cp_import.php';
+require_once __DIR__ . '/../db/foto_upload.php';
 $db = getAdminDB();
 
 function fetchAll($result): array {
@@ -39,26 +40,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'impor
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($errors) && !isset($_POST['accion'])) {
     $grupo = $db->real_escape_string($_POST['grupo'] ?? '');
 
-    // Subida de logo
+    // Subida de logo: es público (se ve en el login), por eso va en images/brand/ y no en uploads/
     $logoGuardado = '';
-    if (!empty($_FILES['logo_file']['name']) && $_FILES['logo_file']['error'] === UPLOAD_ERR_OK) {
-        // Extensión según el contenido real del archivo, no según su nombre.
-        // SVG no se acepta: puede contener JavaScript (XSS).
-        $info = @getimagesize($_FILES['logo_file']['tmp_name']);
-        $ext  = [IMAGETYPE_PNG => 'png', IMAGETYPE_JPEG => 'jpg', IMAGETYPE_WEBP => 'webp'][$info[2] ?? 0] ?? '';
-        if ($ext === '') {
-            $errors[] = 'Formato de logo no permitido. Use PNG, JPG o WEBP.';
-        } elseif ($_FILES['logo_file']['size'] > 2 * 1024 * 1024) {
-            $errors[] = 'El logo no debe superar 2 MB.';
+    if (!empty($_FILES['logo_file']['name'])) {
+        $r = procesarLogo($_FILES['logo_file'], __DIR__ . '/../images/brand');
+        if ($r['ok']) {
+            $logoGuardado = 'images/brand/' . $r['filename'];
+            $anterior = appConfig('sistema_logo');
+            $anteriorPath = __DIR__ . '/../images/brand/' . basename($anterior);
+            if (str_starts_with($anterior, 'images/brand/') && is_file($anteriorPath)) unlink($anteriorPath);
         } else {
-            $uploadsDir = __DIR__ . '/../uploads/';
-            if (!is_dir($uploadsDir)) mkdir($uploadsDir, 0755, true);
-            $filename = 'logo.' . $ext;
-            if (move_uploaded_file($_FILES['logo_file']['tmp_name'], $uploadsDir . $filename)) {
-                $logoGuardado = 'uploads/' . $filename;
-            } else {
-                $errors[] = 'No se pudo guardar el archivo de logo.';
-            }
+            $errors[] = $r['error'];
         }
     }
 
@@ -145,7 +137,7 @@ a{color:inherit;text-decoration:none}
 .pass-wrap input{padding-right:44px}
 .pass-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;line-height:1}
 </style>
-<link rel="stylesheet" href="assets/admin.css?v=2">
+<link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 

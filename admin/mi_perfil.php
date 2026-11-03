@@ -71,7 +71,7 @@ body{font-size:14px}
 .alert-success{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0}
 .alert-error{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
 </style>
-<link rel="stylesheet" href="assets/admin.css?v=2">
+<link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 <?php $navTitle = 'Mi perfil'; $activeModule = 'mi_perfil'; require __DIR__ . '/_nav.php'; ?>
@@ -112,9 +112,9 @@ body{font-size:14px}
       <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
       <input type="hidden" name="accion" value="subir">
       <label class="drop">
-        <input type="file" name="foto" id="foto" accept="image/jpeg,image/png,image/webp" required>
+        <input type="file" name="foto" id="foto" accept="image/*" data-compress="1024" required>
       </label>
-      <p class="hint">JPG, PNG o WEBP · máx. 3 MB · se recorta en cuadrado. Solo los usuarios del panel pueden verla.</p>
+      <p class="hint">JPG, PNG o WEBP (también fotos del celular; se comprimen antes de subir) · se recorta en cuadrado. Solo los usuarios del panel pueden verla.</p>
       <div class="actions">
         <button type="submit" class="btn btn-primary">Guardar foto</button>
       </div>
@@ -130,6 +130,7 @@ body{font-size:14px}
   <?php endif ?>
 </div>
 
+<script src="assets/img-compress.js?v=1"></script>
 <script>
 // Vista previa local (no sube nada hasta pulsar Guardar)
 document.getElementById('foto')?.addEventListener('change', function () {

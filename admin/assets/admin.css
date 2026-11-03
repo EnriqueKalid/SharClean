@@ -157,6 +157,22 @@ html.sb-collapsed .sb-collapse { transform: rotate(180deg); }
   .topbar-menu { display: grid; }
 }
 
+/* ── Tablas: contenedor con scroll horizontal (lo agrega _nav.php) ────── */
+.tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+.tbl-scroll > table { min-width: 100%; }
+
+/* ── Ajustes responsivos de los módulos (reglas de cada página) ────────── */
+@media (max-width: 960px) {
+  body > .body { padding: 16px !important; }
+  .periodo-row { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important; }
+}
+@media (max-width: 640px) {
+  .field-grid, .form-grid, .two-col, .vf-grid, .vf-grid-2, .inc-grid { grid-template-columns: 1fr !important; }
+  .stats { grid-template-columns: repeat(2, 1fr) !important; }
+  .tbl-scroll th, .tbl-scroll td { white-space: nowrap; }
+  .topbar h1 { font-size: 17px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

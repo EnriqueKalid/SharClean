@@ -233,7 +233,7 @@ tr:hover td{background:#f8fafc}
 .u-name{display:inline-flex;align-items:center;gap:10px}
 .u-av{width:30px;height:30px;border-radius:50%;object-fit:cover;flex:0 0 30px;display:inline-grid;place-items:center;background:#e0f2fe;color:#0369a1;font-weight:700;font-size:12px;text-transform:uppercase}
 </style>
-<link rel="stylesheet" href="assets/admin.css?v=2">
+<link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 <?php

@@ -377,7 +377,7 @@ textarea{resize:vertical;min-height:80px}
   .firma-box{text-align:center;border-top:1px solid #000;padding-top:8px;font-size:9pt}
 }
 </style>
-<link rel="stylesheet" href="assets/admin.css?v=2">
+<link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 

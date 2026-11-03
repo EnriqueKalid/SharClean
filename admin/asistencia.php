@@ -308,7 +308,7 @@ input[type=text].inp-sm{width:180px;}
 @media(max-width:900px){.stats{grid-template-columns:repeat(3,1fr);}.inc-grid{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:580px){.stats{grid-template-columns:repeat(2,1fr);}}
 </style>
-<link rel="stylesheet" href="assets/admin.css?v=2">
+<link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 
