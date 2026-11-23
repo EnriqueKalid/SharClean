@@ -5,9 +5,7 @@
  */
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) session_start();
-
-require_once __DIR__ . '/../db/config.php';
+require_once __DIR__ . '/_boot.php';
 
 if (empty($_SESSION['portal_empleado_id'])) {
     header('Location: login.php');
@@ -31,7 +29,7 @@ function portalEmpleado(): array
     $row = $db->query("SELECT * FROM empleados WHERE id=$id LIMIT 1")->fetch_assoc();
     $db->close();
 
-    if (!$row || $row['estatus'] === 'baja_definitiva' || (int)$row['portal_activo'] !== 1) {
+    if (!$row || !portalPuedeEntrar($row)) {
         session_unset();
         session_destroy();
         header('Location: login.php?motivo=inactivo');

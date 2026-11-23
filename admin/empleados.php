@@ -4,12 +4,15 @@ declare(strict_types=1);
 require_once __DIR__ . '/auth.php';
 requirePermiso('empleados');
 require_once __DIR__ . '/../db/csrf.php';
+require_once __DIR__ . '/../db/expediente.php';   // incluye db/foto_upload.php
+require_once __DIR__ . '/../db/registro.php';
 
 /* ── Helpers ──────────────────────────────────────────────── */
-function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
-function fd(string $d): string { return $d ? date('d/m/Y', strtotime($d)) : '—'; }
-function fdt(string $d): string { return $d ? date('d/m/Y H:i', strtotime($d)) : '—'; }
+function h($s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+function fd(?string $d): string { return $d ? date('d/m/Y', strtotime($d)) : '—'; }
+function fdt(?string $d): string { return $d ? date('d/m/Y H:i', strtotime($d)) : '—'; }
 function money(mixed $v): string { return $v !== null ? '$' . number_format((float)$v, 2) : '—'; }
+function kb(int $b): string { return $b >= 1048576 ? number_format($b / 1048576, 1) . ' MB' : max(1, (int)round($b / 1024)) . ' KB'; }
 
 function ebadge(string $s): string {
     $m = [
@@ -20,7 +23,7 @@ function ebadge(string $s): string {
         'baja_definitiva' => ['b-del',        'Baja'],
     ];
     [$c, $l] = $m[$s] ?? ['b-read', $s];
-    return "<span class='badge $c'>$l</span>";
+    return "<span class='badge $c'>" . h($l) . "</span>";
 }
 function ctbadge(string $s): string {
     $m = [
@@ -31,7 +34,7 @@ function ctbadge(string $s): string {
         'honorarios'    => ['b-read',    'Honorarios'],
     ];
     [$c, $l] = $m[$s] ?? ['b-read', $s];
-    return "<span class='badge $c'>$l</span>";
+    return "<span class='badge $c'>" . h($l) . "</span>";
 }
 function fetchAll($result): array {
     $rows = [];
@@ -47,6 +50,19 @@ function sel(string $name, array $opts, mixed $current, string $placeholder = ''
     }
     return $out . '</select>';
 }
+function iniciales(array $e): string {
+    $s = mb_substr((string)($e['nombre'] ?? ''), 0, 1) . mb_substr((string)($e['apellido_paterno'] ?? ''), 0, 1);
+    return mb_strtoupper($s) ?: '?';
+}
+/** URL de la foto de referencia con versión (cacheable mientras no cambie). */
+function fotoUrl(array $e): string {
+    return 'empleado_foto.php?emp=' . (int)$e['id'] . '&v=' . substr(md5((string)$e['foto_referencia']), 0, 8);
+}
+
+const EMP_TABS = ['personal', 'laboral', 'bancario', 'portal', 'expediente'];
+
+/** Avisos que sobreviven al redirect (POST → GET). */
+function empFlash(string $tipo, string $msg): void { $_SESSION['emp_flash'][$tipo][] = $msg; }
 
 /* ── POST handler ─────────────────────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -54,6 +70,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $db  = getAdminDB();
     $act = $_POST['action'] ?? '';
     $id  = (int)($_POST['id'] ?? 0);
+    $tab = in_array($_POST['tab'] ?? '', EMP_TABS, true) ? $_POST['tab'] : 'personal';
+    $redirect = 'empleados.php';
 
     if ($act === 'save_empleado') {
         /* ── Sanitizar campos ── */
@@ -110,24 +128,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $portal_pin      = trim($_POST['portal_pin'] ?? '');
         $portal_activo   = ($_POST['portal_activo'] ?? '1') === '0' ? 0 : 1;
 
-        /* ── Foto de referencia (si se subió una nueva) ── */
+        /* ── Foto de referencia: se valida por contenido real y se re-codifica a ≤800 px ── */
         $fotoReferenciaNueva = null;
-        if (!empty($_FILES['foto_referencia']['name']) && $_FILES['foto_referencia']['error'] === UPLOAD_ERR_OK) {
-            $allowedTypes = ['image/jpeg', 'image/png'];
-            $maxSize      = 3 * 1024 * 1024; // 3 MB
-            if (in_array($_FILES['foto_referencia']['type'], $allowedTypes, true)
-                && $_FILES['foto_referencia']['size'] <= $maxSize) {
-                $uploadDir = __DIR__ . '/../uploads/empleados/';
-                if (!is_dir($uploadDir)) mkdir($uploadDir, 0750, true);
-                $ext  = pathinfo($_FILES['foto_referencia']['name'], PATHINFO_EXTENSION);
-                $name = uniqid('ref_', true) . '.' . strtolower($ext);
-                if (move_uploaded_file($_FILES['foto_referencia']['tmp_name'], $uploadDir . $name)) {
-                    $fotoReferenciaNueva = $name;
-                }
-            }
+        $refDir = __DIR__ . '/../uploads/empleados';
+        if (!empty($_FILES['foto_referencia']['name'])) {
+            $r = procesarFotoReferencia($_FILES['foto_referencia'], $refDir);
+            if ($r['ok']) $fotoReferenciaNueva = $r['filename'];
+            else          empFlash('err', 'Foto de referencia: ' . $r['error']);
         }
 
         if ($nombre !== '' && $ap_pat !== '' && $fecha_ingreso !== '') {
+            $new_id = 0;
             if ($id > 0) {
                 /* ── UPDATE ── */
                 $numero = trim($_POST['numero_empleado'] ?? '');
@@ -144,9 +155,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      WHERE id=?'
                 );
                 /* 33 data params + 1 id = 34 total
-                   s×18, i×2, s×4, d, s×6, i, s, i(id) */
+                   s×18, i×2, s×4, d, s×6, i, s, i(id) — cada letra corresponde a su variable en orden */
                 $s->bind_param(
-                    'ssssssssssssssssssiissssdsssssisi',
+                    'ssssssssssssssssssiissssdssssssisi',
                     $numero,$nombre,$ap_pat,$ap_mat,
                     $fn,$sexo,$edo_civil,$curp,$rfc,$nss,
                     $telefono,$email,$email_corp,
@@ -157,7 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $estatus,$fecha_baja,$motivo_baja,$aplicacion_id,$notas,
                     $id
                 );
-                $s->execute();
+                $guardado = $s->execute();
             } else {
                 /* ── INSERT – número auto ── */
                 $max    = (int)$db->query('SELECT COALESCE(MAX(id),0) FROM empleados')->fetch_row()[0];
@@ -177,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
                 /* 33 params: s×18, i×2, s×4, d, s×6, i, s */
                 $s->bind_param(
-                    'ssssssssssssssssssiissssdsssssisi',
+                    'ssssssssssssssssssiissssdssssssis',
                     $numero,$nombre,$ap_pat,$ap_mat,
                     $fn,$sexo,$edo_civil,$curp,$rfc,$nss,
                     $telefono,$email,$email_corp,
@@ -187,23 +198,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $salario,$periodo,$banco,$clabe,
                     $estatus,$fecha_baja,$motivo_baja,$aplicacion_id,$notas
                 );
-                $s->execute();
-                $new_id = $db->insert_id;
-                /* Corregir número con ID real */
-                $final_num = 'EMP-' . str_pad((string)$new_id, 4, '0', STR_PAD_LEFT);
-                $db->query("UPDATE empleados SET numero_empleado='$final_num' WHERE id=$new_id");
+                $guardado = $s->execute();
+                if ($guardado) {
+                    $new_id = $db->insert_id;
+                    /* Corregir número con ID real */
+                    $final_num = 'EMP-' . str_pad((string)$new_id, 4, '0', STR_PAD_LEFT);
+                    $db->query("UPDATE empleados SET numero_empleado='$final_num' WHERE id=$new_id");
 
-                /* Marcar candidato como contratado */
-                if ($aplicacion_id) {
-                    $su = $db->prepare('UPDATE aplicaciones_empleo SET estado=? WHERE id=?');
-                    $est = 'contratado';
-                    $su->bind_param('si', $est, $aplicacion_id);
-                    $su->execute();
+                    /* Marcar candidato como contratado */
+                    if ($aplicacion_id) {
+                        $su = $db->prepare('UPDATE aplicaciones_empleo SET estado=? WHERE id=?');
+                        $est = 'contratado';
+                        $su->bind_param('si', $est, $aplicacion_id);
+                        $su->execute();
+                    }
                 }
+            }
+
+            if (!$guardado) {
+                error_log('[Sharclean empleados] save failed: ' . $s->error);
+                if ($fotoReferenciaNueva !== null) unlink("$refDir/$fotoReferenciaNueva");
+                empFlash('err', str_contains($s->error, 'Duplicate')
+                    ? 'No se pudo guardar: el número de empleado ya existe.'
+                    : 'No se pudo guardar el empleado. Revisa los datos e intenta de nuevo.');
+                $db->close();
+                header('Location: ' . ($id > 0 ? "empleados.php?edit=$id&tab=$tab" : 'empleados.php?form=1'));
+                exit;
             }
 
             /* ── Guardar foto de referencia / credenciales de portal ── */
             $empIdFinal = $id > 0 ? $id : $new_id;
+
+            $fotoAnterior = '';
+            if ($fotoReferenciaNueva !== null) {
+                $fr = $db->query("SELECT foto_referencia FROM empleados WHERE id=$empIdFinal LIMIT 1");
+                $fotoAnterior = basename((string)(($fr ? $fr->fetch_assoc() : null)['foto_referencia'] ?? ''));
+            }
+
             $cols   = ['portal_username=?', 'portal_activo=?'];
             $types  = 'si';
             $params = [$portal_username, $portal_activo];
@@ -228,8 +259,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $params[] = $empIdFinal;
             $sp = $db->prepare('UPDATE empleados SET ' . implode(',', $cols) . ' WHERE id=?');
             $sp->bind_param($types, ...$params);
-            $sp->execute();
+            if ($sp->execute()) {
+                if ($fotoAnterior !== '' && $fotoAnterior !== $fotoReferenciaNueva && is_file("$refDir/$fotoAnterior")) {
+                    unlink("$refDir/$fotoAnterior");
+                }
+            } elseif (str_contains($db->error, 'Duplicate')) {
+                empFlash('err', 'Ese usuario de portal ya lo tiene otro empleado.');
+            }
+
+            empFlash('ok', $id > 0 ? 'Cambios guardados.' : 'Empleado creado. Ya puedes cargar su expediente.');
+            $redirect = "empleados.php?edit=$empIdFinal&tab=" . ($id > 0 ? $tab : 'expediente');
+        } else {
+            if ($fotoReferenciaNueva !== null) unlink("$refDir/$fotoReferenciaNueva");
+            empFlash('err', 'Nombre, apellido paterno y fecha de ingreso son obligatorios.');
+            $redirect = $id > 0 ? "empleados.php?edit=$id&tab=$tab" : 'empleados.php?form=1';
         }
+    } elseif ($act === 'doc_upload' && $id > 0) {
+        /* ── Subir uno o varios archivos al expediente ── */
+        $existe = $db->query("SELECT 1 FROM empleados WHERE id=$id LIMIT 1");
+        $tipoId = (int)($_POST['tipo_id'] ?? 0) ?: null;
+        $nombre = trim($_POST['doc_nombre'] ?? '') ?: null;
+        if ($tipoId) {
+            $tr = $db->query("SELECT 1 FROM documento_tipos WHERE id=$tipoId AND activo=1 LIMIT 1");
+            if (!$tr || !$tr->fetch_row()) $tipoId = -1;
+        }
+        $f = $_FILES['documento'] ?? null;
+
+        if (!$existe || !$existe->fetch_row() || $tipoId === -1) {
+            empFlash('err', 'Solicitud no válida.');
+        } elseif (!$tipoId && $nombre === null) {
+            empFlash('err', 'Escribe el nombre del documento adicional.');
+        } elseif (!$f || !is_array($f['name']) || ($f['name'][0] ?? '') === '') {
+            empFlash('err', 'Selecciona al menos un archivo.');
+        } else {
+            $subidos = 0;
+            foreach (array_keys($f['name']) as $i) {
+                $one = ['name' => $f['name'][$i], 'tmp_name' => $f['tmp_name'][$i], 'error' => $f['error'][$i], 'size' => $f['size'][$i]];
+                $r = guardarDocumentoEmpleado($db, $id, $tipoId, $tipoId ? null : $nombre, $one, adminUser()['id']);
+                $r['ok'] ? $subidos++ : empFlash('err', $r['error']);
+            }
+            if ($subidos) empFlash('ok', $subidos === 1 ? 'Documento cargado.' : "$subidos documentos cargados.");
+        }
+        $redirect = "empleados.php?edit=$id&tab=expediente";
+    } elseif ($act === 'doc_delete' && $id > 0) {
+        $docId = (int)($_POST['doc_id'] ?? 0);
+        eliminarDocumentoEmpleado($db, $docId, $id)
+            ? empFlash('ok', 'Documento eliminado.')
+            : empFlash('err', 'No se encontró el documento.');
+        $redirect = "empleados.php?edit=$id&tab=expediente";
+    } elseif ($act === 'reg_aprobar' && $id > 0) {
+        /* ── Autorregistro: RRHH confirma que la selfie es de esta persona ── */
+        $me = adminUser()['id'] ?: 'NULL';
+        $db->query("UPDATE empleados SET registro_estado='aprobado', registro_revisado_por=$me
+                    WHERE id=$id AND registro_estado='pendiente'");
+        $db->affected_rows === 1
+            ? empFlash('ok', 'Registro aprobado: el empleado ya puede checar con su usuario y contraseña.')
+            : empFlash('err', 'Este registro ya no estaba pendiente.');
+        $redirect = "empleados.php?edit=$id";
+    } elseif ($act === 'reg_rechazar' && $id > 0) {
+        /* Se quitan selfie y credenciales; el empleado puede volver a registrarse con la liga */
+        $me  = adminUser()['id'] ?: 'NULL';
+        $fr  = $db->query("SELECT foto_referencia FROM empleados WHERE id=$id AND registro_estado='pendiente' LIMIT 1");
+        $row = $fr ? $fr->fetch_assoc() : null;
+        if ($row) {
+            $db->query("UPDATE empleados SET registro_estado='rechazado', registro_revisado_por=$me,
+                          portal_username=NULL, portal_password_hash=NULL, foto_referencia=NULL
+                        WHERE id=$id AND registro_estado='pendiente'");
+            $f = __DIR__ . '/../uploads/empleados/' . basename((string)$row['foto_referencia']);
+            if ($row['foto_referencia'] && is_file($f)) unlink($f);
+            empFlash('ok', 'Registro rechazado. El empleado puede volver a registrarse con la liga.');
+        } else {
+            empFlash('err', 'Este registro ya no estaba pendiente.');
+        }
+        $redirect = "empleados.php?edit=$id";
+    } elseif ($act === 'reg_liga') {
+        /* ── Liga general de registro: activar / desactivar / generar nueva ── */
+        $op = $_POST['op'] ?? '';
+        if ($op === 'activar') {
+            if (strlen(appConfig('registro_clave')) !== 32) registroNuevaClave();
+            setAppConfig('registro_activo', '1');
+            empFlash('ok', 'Liga de registro activada.');
+        } elseif ($op === 'desactivar') {
+            setAppConfig('registro_activo', '0');
+            empFlash('ok', 'Liga de registro desactivada: ya nadie puede usarla.');
+        } elseif ($op === 'rotar') {
+            registroNuevaClave();
+            empFlash('ok', 'Se generó una liga nueva. La anterior ya no funciona.');
+        }
+        $redirect = 'empleados.php?liga=1';
     } elseif ($act === 'toggle_baja' && $id > 0) {
         $row = $db->query("SELECT estatus FROM empleados WHERE id=$id LIMIT 1")->fetch_assoc();
         if ($row) {
@@ -243,28 +360,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $su->execute();
         }
     } elseif ($act === 'del_empleado' && $id > 0) {
-        $chk = $db->prepare('SELECT estatus FROM empleados WHERE id=?');
+        $chk = $db->prepare('SELECT estatus, foto_referencia FROM empleados WHERE id=?');
         $chk->bind_param('i', $id);
         $chk->execute();
-        $chk->bind_result($estatus_actual);
+        $chk->bind_result($estatus_actual, $foto_actual);
         $chk->fetch();
         $chk->close();
         if ($estatus_actual === 'baja_definitiva') {
             $su = $db->prepare('DELETE FROM empleados WHERE id=?');
             $su->bind_param('i', $id);
-            $su->execute();
+            if ($su->execute()) {
+                /* Borrar también sus archivos: foto de referencia y expediente */
+                $ref = __DIR__ . '/../uploads/empleados/' . basename((string)$foto_actual);
+                if ($foto_actual && is_file($ref)) unlink($ref);
+                if (expedienteDisponible($db)) eliminarExpedienteCompleto($db, $id);
+            }
         }
     }
 
     $db->close();
-    header('Location: empleados.php'); exit;
+    header('Location: ' . $redirect); exit;
 }
 
 /* ── Fetch data ───────────────────────────────────────────── */
 $db   = getAdminDB();
 $csrf = generateCsrfToken();
 
+$flash = $_SESSION['emp_flash'] ?? [];
+unset($_SESSION['emp_flash']);
+
 $f_dept    = (int)($_GET['f_dept']    ?? 0);
+$f_registro = ($_GET['f_registro'] ?? '') === 'pendiente';
 $f_estatus = in_array($_GET['f_estatus'] ?? '', ['activo','vacaciones','incapacidad','baja_temporal','baja_definitiva'])
              ? $_GET['f_estatus'] : '';
 
@@ -278,25 +404,23 @@ $cTotal   = (int)$db->query('SELECT COUNT(*) FROM empleados')->fetch_row()[0];
 $departamentos = fetchAll($db->query('SELECT id, nombre FROM departamentos WHERE activo=1 ORDER BY nombre'));
 $puestos       = fetchAll($db->query('SELECT id, nombre, departamento_id FROM puestos WHERE activo=1 ORDER BY nombre'));
 
-/* Lista de empleados con filtros */
-// Valores validados contra allowlists arriba, seguros para query directa
-$where = '1=1';
-if ($f_dept)    $where .= ' AND e.departamento_id=' . (int)$f_dept;
-if ($f_estatus) $where .= " AND e.estatus='" . $db->real_escape_string($f_estatus) . "'";
+/* Expediente digital (si ya se ejecutó migrate_expediente_v1.sql) */
+$expOk  = expedienteDisponible($db);
 
-$sqlBase = "SELECT e.*, d.nombre AS dept_nombre
-            FROM empleados e
-            LEFT JOIN departamentos d ON d.id = e.departamento_id
-            WHERE $where
-            ORDER BY FIELD(e.estatus,'activo','vacaciones','incapacidad','baja_temporal','baja_definitiva'), e.nombre ASC
-            LIMIT 500";
-$empleados = fetchAll($db->query($sqlBase));
+/* Autorregistro (si ya se ejecutó migrate_registro_v1.sql) */
+$regOk     = registroDisponible($db);
+$regPend   = $regOk ? registroPendientes($db) : 0;
+$regActiva = $regOk && registroActivo();
+$regUrl    = $regOk && strlen(appConfig('registro_clave')) === 32 ? registroUrl(appConfig('registro_clave')) : '';
+$avance = $expOk ? expedienteAvance($db) : ['total' => 0, 'por_empleado' => []];
 
 /* Empleado a editar */
 $editEmp = null;
 if (isset($_GET['edit'])) {
     $eid = (int)$_GET['edit'];
-    $editEmp = $db->query("SELECT * FROM empleados WHERE id=$eid LIMIT 1")->fetch_assoc();
+    $editEmp = $db->query("SELECT e.*, d.nombre AS dept_nombre FROM empleados e
+                           LEFT JOIN departamentos d ON d.id = e.departamento_id
+                           WHERE e.id=$eid LIMIT 1")->fetch_assoc();
 }
 
 /* Pre-llenado desde candidato */
@@ -306,11 +430,39 @@ if (isset($_GET['from_aplicacion']) && !$editEmp) {
     $fromAplicacion = $db->query("SELECT * FROM aplicaciones_empleo WHERE id=$aid LIMIT 1")->fetch_assoc();
 }
 
+$showForm = isset($_GET['form']) || $editEmp !== null || $fromAplicacion !== null;
+
+/* Ficha: expediente del empleado */
+$tiposDoc = $docsPorTipo = $docsExtra = [];
+if ($editEmp && $expOk) {
+    $tiposDoc = expedienteTipos($db);
+    foreach (expedienteDocumentos($db, (int)$editEmp['id']) as $d) {
+        if ($d['tipo_id'] === null) $docsExtra[] = $d;
+        else $docsPorTipo[(int)$d['tipo_id']][] = $d;
+    }
+}
+
+/* Directorio */
+$empleados = [];
+if (!$showForm) {
+    // Valores validados contra allowlists arriba, seguros para query directa
+    $where = '1=1';
+    if ($f_dept)    $where .= ' AND e.departamento_id=' . (int)$f_dept;
+    if ($f_estatus) $where .= " AND e.estatus='" . $db->real_escape_string($f_estatus) . "'";
+    if ($f_registro && $regOk) $where .= " AND e.registro_estado='pendiente'";
+
+    $empleados = fetchAll($db->query("SELECT e.*, d.nombre AS dept_nombre
+                FROM empleados e
+                LEFT JOIN departamentos d ON d.id = e.departamento_id
+                WHERE $where
+                ORDER BY FIELD(e.estatus,'activo','vacaciones','incapacidad','baja_temporal','baja_definitiva'), e.nombre ASC
+                LIMIT 500"));
+}
+
 $db->close();
 
-$showForm    = isset($_GET['form']) || $editEmp !== null || $fromAplicacion !== null;
-$fromApId    = $fromAplicacion['id'] ?? ($editEmp['aplicacion_id'] ?? 0);
-$pre         = $editEmp ?? [];          /* datos para el formulario */
+$fromApId = $fromAplicacion['id'] ?? ($editEmp['aplicacion_id'] ?? 0);
+$pre      = $editEmp ?? [];          /* datos para el formulario */
 
 /* Si viene de candidato y no hay datos de edición, pre-llenar nombre/teléfono */
 if ($fromAplicacion && !$editEmp) {
@@ -324,171 +476,298 @@ if ($fromAplicacion && !$editEmp) {
     $pre['aplicacion_id']    = $fromAplicacion['id'];
 }
 
+$tab = in_array($_GET['tab'] ?? '', EMP_TABS, true) ? $_GET['tab'] : 'personal';
+if ($tab === 'expediente' && !($editEmp && $expOk)) $tab = 'personal';
+
+/* Avance del expediente del empleado en edición */
+$expCubiertos = $editEmp ? ($avance['por_empleado'][(int)$editEmp['id']] ?? 0) : 0;
+
 /* Helpers de valor */
 $v = fn(string $k, string $def = '') => h((string)($pre[$k] ?? $def));
+
+/** Barra de avance del expediente (x de y obligatorios). */
+$barra = function (int $hechos, int $total): string {
+    if ($total === 0) return '<span class="exp-none">—</span>';
+    $pct = (int)round($hechos / $total * 100);
+    $cls = $pct >= 100 ? 'full' : ($pct >= 50 ? 'mid' : 'low');
+    return "<span class='exp-bar $cls' title='$hechos de $total documentos obligatorios'><i style='width:{$pct}%'></i></span>"
+         . "<span class='exp-num'>$hechos/$total</span>";
+};
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Empleados – Sharclean Admin</title>
+<title>Empleados – Admin</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px;}
-a{color:inherit;text-decoration:none;}
-.body{max-width:1400px;margin:0 auto;padding:24px 16px;}
+body{font-size:14px}
+a{color:inherit;text-decoration:none}
+.body{max-width:1280px;margin:0 auto;padding:28px}
+.muted{color:#94a3b8}
 /* Stats */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}
-.stat{background:#fff;border-radius:10px;padding:20px 24px;box-shadow:0 1px 3px rgba(0,0,0,.07);}
-.stat-val{font-size:34px;font-weight:800;color:#0284C7;}
-.stat-lbl{font-size:13px;color:#64748b;margin-top:4px;}
-.stat-sub{font-size:12px;color:#94a3b8;margin-top:2px;}
-/* Filter bar */
-.filter-bar{display:flex;gap:8px;align-items:center;padding:12px 18px;background:#fff;border-radius:10px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.07);flex-wrap:wrap;}
-.filter-bar label{font-size:12px;font-weight:600;color:#64748b;white-space:nowrap;}
-.filter-bar select{padding:6px 9px;border-radius:6px;border:1.5px solid #e2e8f0;font-size:13px;background:#fff;outline:none;}
-.filter-bar select:focus{border-color:#0284C7;}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+.stat{background:#fff;border:1px solid #e6e9f0;border-radius:14px;padding:18px 20px}
+.stat-val{font-size:30px;font-weight:750;letter-spacing:-.02em;color:#0f172a}
+.stat-lbl{font-size:13px;color:#475569;margin-top:2px;font-weight:600}
+.stat-sub{font-size:12px;color:#94a3b8;margin-top:2px}
+.stat:first-child .stat-val{color:var(--brand)}
+/* Toolbar */
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.search{position:relative;flex:1;min-width:220px;max-width:360px}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:#94a3b8}
+.search input{width:100%;padding:9px 12px 9px 36px;border:1px solid #e2e8f0;border-radius:10px;font:inherit;background:#fff}
+.toolbar select{padding:9px 10px;border:1px solid #e2e8f0;border-radius:10px;font:inherit;font-size:13px;background:#fff}
+.search input:focus,.toolbar select:focus,.vf-inp:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.toolbar .spacer{flex:1}
 /* Cards */
-.card{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.07);overflow:hidden;margin-bottom:20px;}
-.card-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #f1f5f9;}
-.card-header h2{font-size:15px;font-weight:700;color:#1e293b;}
+.card{background:#fff;border:1px solid #e6e9f0;border-radius:14px;overflow:hidden;margin-bottom:20px}
+.card-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid #f1f5f9}
+.card-header h2,.card-header h3{font-size:15px;font-weight:700;color:#0f172a}
 /* Table */
-.table-wrap{overflow-x:auto;}
-table{width:100%;border-collapse:collapse;}
-th{background:#f8fafc;padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap;}
-td{padding:10px 14px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
-tr:last-child td{border-bottom:none;}
-tr:hover td{background:#f8fafc;}
+table{width:100%;border-collapse:collapse}
+th{background:#f8fafc;padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tbody tr[data-href]{cursor:pointer;transition:background .12s}
+tbody tr[data-href]:hover td{background:#f8fafc}
+.who{display:flex;align-items:center;gap:12px;min-width:220px}
+.who strong{display:block;font-weight:600;color:#0f172a}
+.who small{display:block;font-size:12px;color:#94a3b8;margin-top:1px}
+.av{width:38px;height:38px;flex:0 0 38px;border-radius:50%;object-fit:cover;display:grid;place-items:center;background:#e0f2fe;color:#0369a1;font-weight:700;font-size:13px}
+.av-lg{width:84px;height:84px;flex-basis:84px;font-size:28px;box-shadow:0 0 0 3px #fff,0 0 0 5px var(--brand-soft)}
+.num-emp{font-size:11px;font-weight:700;color:#7c3aed;background:#ede9fe;padding:1px 7px;border-radius:5px;margin-left:6px;vertical-align:1px}
 /* Badges */
-.badge{display:inline-block;padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700;}
-.b-new{background:#dbeafe;color:#1d4ed8;}
-.b-read{background:#f1f5f9;color:#94a3b8;}
-.b-pending{background:#fef9c3;color:#854d0e;}
-.b-contacted{background:#ffedd5;color:#9a3412;}
-.b-quoted{background:#f3e8ff;color:#7e22ce;}
-.b-ok{background:#dcfce7;color:#166534;}
-.b-del{background:#fee2e2;color:#991b1b;}
+.badge{display:inline-block;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;white-space:nowrap}
+.b-new{background:#dbeafe;color:#1d4ed8}.b-read{background:#f1f5f9;color:#64748b}.b-pending{background:#fef9c3;color:#854d0e}
+.b-contacted{background:#ffedd5;color:#9a3412}.b-quoted{background:#f3e8ff;color:#7e22ce}.b-ok{background:#dcfce7;color:#166534}.b-del{background:#fee2e2;color:#991b1b}
+/* Avance de expediente */
+.exp-bar{display:inline-block;width:64px;height:6px;border-radius:99px;background:#eef2f7;overflow:hidden;vertical-align:middle;margin-right:8px}
+.exp-bar i{display:block;height:100%;border-radius:99px}
+.exp-bar.low i{background:#f97316}.exp-bar.mid i{background:#eab308}.exp-bar.full i{background:#22c55e}
+.exp-num{font-size:12px;font-weight:600;color:#475569}
+.exp-none{color:#cbd5e1}
 /* Buttons */
-.btn-sm{padding:5px 10px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;border:none;white-space:nowrap;display:inline-block;}
-.btn-primary{background:#0284C7;color:#fff;}
-.btn-primary:hover{background:#0369a1;}
-.btn-muted{background:#e2e8f0;color:#475569;}
-.btn-muted:hover{background:#cbd5e1;}
-.btn-danger{background:#fee2e2;color:#dc2626;}
-.btn-danger:hover{background:#fecaca;}
-.btn-success{background:#dcfce7;color:#166534;}
-.btn-success:hover{background:#bbf7d0;}
-.btn-violet{background:#ede9fe;color:#7c3aed;}
-.btn-violet:hover{background:#ddd6fe;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;border-radius:10px;border:1px solid transparent;cursor:pointer;font:inherit;font-size:13px;font-weight:600;white-space:nowrap;background:none;transition:background .15s,filter .15s}
+.btn-primary{background:var(--brand);color:#fff}.btn-primary:hover{filter:brightness(.92)}
+.btn-ghost{background:#fff;border-color:#e2e8f0;color:#334155}.btn-ghost:hover{background:#f8fafc}
+.btn-danger{background:#fff;border-color:#fecaca;color:#dc2626}.btn-danger:hover{background:#fef2f2}
+.btn-success{background:#fff;border-color:#bbf7d0;color:#166534}.btn-success:hover{background:#f0fdf4}
+.btn-sm{padding:5px 10px;font-size:12px;border-radius:8px}
+.btn[disabled]{opacity:.5;cursor:default}
+.row-actions{display:flex;gap:6px;justify-content:flex-end;align-items:center}
+.row-actions form{display:inline}
+/* Ficha */
+.ficha-head{display:flex;align-items:center;gap:20px;padding:22px 24px;flex-wrap:wrap}
+.ficha-head h2{font-size:21px;font-weight:750;letter-spacing:-.01em;color:#0f172a}
+.ficha-meta{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:6px;color:#64748b;font-size:13px}
+.ficha-exp{margin-left:auto;text-align:right;min-width:170px}
+.ficha-exp small{display:block;font-size:12px;color:#64748b;margin-bottom:6px}
+.ficha-exp .exp-bar{width:120px;height:8px}
+.tabs{display:flex;gap:4px;padding:0 16px;border-top:1px solid #f1f5f9;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:13px 14px;border:none;background:none;font:inherit;font-size:14px;font-weight:600;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.tab:hover{color:#0f172a}
+.tab.active{color:var(--brand);border-bottom-color:var(--brand)}
+.tab[disabled]{opacity:.45;cursor:not-allowed}
+.panel{display:none}
+.panel.active{display:block;animation:page-in .2s ease both}
 /* Form */
-.form-wrap{padding:24px 20px;}
-.form-section{margin-bottom:28px;}
-.form-section-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:#0284C7;margin-bottom:14px;padding-bottom:6px;border-bottom:2px solid #e0f2fe;}
-.vf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-.vf-grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
-.vf-field label{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:5px;}
-.vf-inp{width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;transition:border-color .15s;background:#fff;}
-.vf-inp:focus{border-color:#0284C7;}
-textarea.vf-inp{resize:vertical;}
-.vf-span2{grid-column:span 2;}
-.vf-span3{grid-column:span 3;}
-.form-actions{display:flex;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;align-items:center;}
-.from-candidate-banner{background:#ede9fe;border:1px solid #c4b5fd;border-radius:8px;padding:10px 14px;margin-bottom:20px;font-size:13px;color:#6d28d9;}
-.empty{padding:56px;text-align:center;color:#94a3b8;font-size:15px;}
-.num-emp{font-size:12px;font-weight:700;color:#7c3aed;background:#ede9fe;padding:2px 8px;border-radius:4px;}
-@media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr);}.vf-grid{grid-template-columns:repeat(2,1fr);}.vf-span3{grid-column:span 2;}}
-@media(max-width:580px){.stats{grid-template-columns:1fr 1fr;}.vf-grid,.vf-grid-2{grid-template-columns:1fr;}.vf-span2,.vf-span3{grid-column:1;}}
+.form-wrap{padding:24px}
+.form-section{margin-bottom:28px}
+.form-section:last-child{margin-bottom:0}
+.form-section-title{font-size:12px;font-weight:750;text-transform:uppercase;letter-spacing:.07em;color:#64748b;margin-bottom:14px}
+.vf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.vf-grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.vf-field label{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:5px}
+.vf-field label span{font-weight:400;color:#94a3b8}
+.vf-inp{width:100%;padding:9px 11px;border:1px solid #dbe1ea;border-radius:9px;font:inherit;font-size:14px;background:#fff;transition:border-color .15s}
+textarea.vf-inp{resize:vertical}
+.vf-span2{grid-column:span 2}.vf-span3{grid-column:span 3}
+.save-bar{position:sticky;bottom:0;display:flex;gap:10px;align-items:center;padding:14px 24px;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-top:1px solid #f1f5f9}
+.save-bar[hidden]{display:none}
+.save-bar .meta{margin-left:auto;font-size:12px;color:#94a3b8}
+.from-candidate-banner{background:#ede9fe;border:1px solid #c4b5fd;border-radius:10px;padding:10px 14px;margin:16px 24px 0;font-size:13px;color:#6d28d9}
+.alert{padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13px}
+.alert-ok{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0}
+.alert-err{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+.alert-info{background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd}
+.empty{padding:56px;text-align:center;color:#94a3b8;font-size:15px}
+/* Autorregistro */
+.reg-review{display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding:20px 24px;border:1.5px solid #fde68a;background:#fffbeb;border-radius:14px;margin-bottom:16px}
+.reg-review img,.reg-review .ref-img{width:120px;height:120px;border-radius:14px;object-fit:cover;flex:0 0 120px}
+.reg-review h3{font-size:16px;font-weight:750;color:#92400e;margin-bottom:4px}
+.reg-review p{font-size:13px;color:#78350f;line-height:1.5;max-width:560px}
+.reg-review .acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.reg-review form{display:inline}
+.b-reg{background:#fef3c7;color:#92400e;margin-left:6px}
+dialog#liga-dialog{border:none;border-radius:18px;padding:0;width:min(560px,94vw);box-shadow:0 24px 64px rgba(15,23,42,.3);margin:auto}
+dialog#liga-dialog::backdrop{background:rgba(15,23,42,.5)}
+.liga-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #f1f5f9}
+.liga-head h3{font-size:16px;font-weight:750}
+.liga-body{padding:20px 22px;display:flex;flex-direction:column;gap:14px;font-size:13px;color:#475569;line-height:1.55}
+.liga-url{display:flex;gap:8px}
+.liga-url input{flex:1;min-width:0;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.liga-estado{display:inline-flex;align-items:center;gap:6px;font-weight:700}
+.liga-estado i{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+.liga-estado.on i{background:#22c55e}
+.liga-acts{display:flex;gap:8px;flex-wrap:wrap}
+.liga-acts form{display:inline}
+/* Foto de referencia */
+.ref-box{display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding:18px;border:1.5px dashed #cbd5e1;border-radius:14px;background:#f8fafc;margin-bottom:24px}
+.ref-img{width:120px;height:120px;border-radius:14px;object-fit:cover;background:#e2e8f0;display:grid;place-items:center;color:#64748b;font-size:34px;font-weight:700;flex:0 0 120px}
+.ref-img[hidden]{display:none}
+.ref-actions{display:flex;flex-direction:column;gap:8px;flex:1;min-width:220px}
+.ref-actions .btns{display:flex;gap:8px;flex-wrap:wrap}
+.ref-actions p{font-size:12px;color:#64748b;line-height:1.5}
+#ref-status{font-size:13px;font-weight:600}
+#ref-status[data-kind=ok]{color:#15803d}#ref-status[data-kind=err]{color:#b91c1c}#ref-status[data-kind=warn]{color:#b45309}
+dialog#cam-dialog{border:none;border-radius:18px;padding:0;width:min(560px,94vw);background:#0f172a;color:#fff;box-shadow:0 24px 64px rgba(0,0,0,.35)}
+dialog#cam-dialog::backdrop{background:rgba(15,23,42,.6)}
+.cam-stage{position:relative;aspect-ratio:3/4;max-height:70vh;background:#000;overflow:hidden}
+.cam-stage video{width:100%;height:100%;object-fit:cover}
+.cam-stage video.mirror{transform:scaleX(-1)}
+.cam-oval{position:absolute;left:50%;top:46%;width:58%;aspect-ratio:3/4;transform:translate(-50%,-50%);border:3px dashed rgba(255,255,255,.75);border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none}
+.cam-foot{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+#cam-msg{font-size:13px;color:#cbd5e1;min-height:18px;text-align:center}
+.cam-btns{display:flex;gap:8px;justify-content:center}
+.cam-btns .btn-ghost{background:transparent;color:#e2e8f0;border-color:#334155}
+/* Expediente */
+.exp-intro{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:18px 24px;border-bottom:1px solid #f1f5f9;color:#64748b;font-size:13px}
+.exp-intro .spacer{flex:1}
+.exp-cat{padding:6px 0}
+.exp-cat h4{font-size:12px;font-weight:750;text-transform:uppercase;letter-spacing:.07em;color:#64748b;padding:16px 24px 6px}
+.doc{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:start;padding:12px 24px;border-top:1px solid #f6f7f9}
+.doc-state{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;margin-top:1px}
+.doc-state.ok{background:#dcfce7;color:#15803d}.doc-state.req{background:#fee2e2;color:#dc2626}.doc-state.opt{background:#f1f5f9;color:#94a3b8}
+.doc-name{font-weight:600;color:#0f172a}
+.doc-name .tag{font-size:10px;font-weight:700;color:#b91c1c;background:#fee2e2;padding:1px 6px;border-radius:99px;margin-left:6px;vertical-align:1px}
+.doc-desc{font-size:12px;color:#94a3b8;margin-top:2px}
+.files{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.file{display:flex;align-items:center;gap:10px;padding:6px 8px 6px 6px;border:1px solid #e6e9f0;border-radius:10px;background:#fff;max-width:100%}
+.file-thumb{width:40px;height:40px;border-radius:7px;object-fit:cover;background:#f1f5f9;display:grid;place-items:center;font-size:10px;font-weight:800;color:#dc2626;flex:0 0 40px}
+.file-info{min-width:0;font-size:12px;line-height:1.35}
+.file-info a{display:block;font-weight:600;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
+.file-info a:hover{color:var(--brand)}
+.file-info span{color:#94a3b8}
+.file form{display:inline}
+.file .x{border:none;background:none;color:#94a3b8;cursor:pointer;font-size:16px;padding:2px 6px;border-radius:6px}
+.file .x:hover{background:#fef2f2;color:#dc2626}
+.up-btn input{display:none}
+.extra-form{display:flex;gap:8px;flex-wrap:wrap;padding:14px 24px 20px}
+.extra-form input[type=text]{flex:1;min-width:200px}
+@media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}.vf-grid{grid-template-columns:repeat(2,1fr)}.vf-span3{grid-column:span 2}.ficha-exp{margin-left:0;text-align:left}}
+@media(max-width:640px){.vf-grid,.vf-grid-2{grid-template-columns:1fr}.vf-span2,.vf-span3{grid-column:1}.doc{grid-template-columns:24px 1fr;padding:12px 16px}.doc .up-btn{grid-column:2}.form-wrap{padding:18px 16px}.save-bar{padding:12px 16px}.search{max-width:none}.toolbar .spacer{display:none}}
 </style>
 <link rel="stylesheet" href="assets/admin.css?v=3">
 </head>
 <body>
 
-<?php $navTitle = '👥 Empleados'; $activeModule = 'empleados'; require __DIR__ . '/_nav.php'; ?>
+<?php
+$navTitle = $editEmp ? 'Expediente del empleado' : ($showForm ? 'Nuevo empleado' : 'Empleados');
+$activeModule = 'empleados';
+require __DIR__ . '/_nav.php';
+?>
 
 <div class="body">
 
-  <!-- Stats -->
-  <div class="stats">
-    <div class="stat">
-      <div class="stat-val"><?= $cActivos ?></div>
-      <div class="stat-lbl">Empleados activos</div>
-      <div class="stat-sub"><?= $cTotal ?> total registrados</div>
-    </div>
-    <div class="stat">
-      <div class="stat-val"><?= $cIncid ?></div>
-      <div class="stat-lbl">Con incidencia</div>
-      <div class="stat-sub">Vacaciones / Incapacidad / Baja temp.</div>
-    </div>
-    <div class="stat">
-      <div class="stat-val"><?= $cBajas ?></div>
-      <div class="stat-lbl">Bajas definitivas</div>
-      <div class="stat-sub">&nbsp;</div>
-    </div>
-    <div class="stat">
-      <div class="stat-val"><?= count($empleados) ?></div>
-      <div class="stat-lbl">Resultado del filtro</div>
-      <div class="stat-sub">&nbsp;</div>
-    </div>
-  </div>
+  <?php foreach ($flash['ok'] ?? [] as $m): ?><div class="alert alert-ok">✓ <?= h($m) ?></div><?php endforeach ?>
+  <?php foreach ($flash['err'] ?? [] as $m): ?><div class="alert alert-err">✗ <?= h($m) ?></div><?php endforeach ?>
 
-  <!-- Filter bar -->
-  <div class="filter-bar">
-    <form method="get" style="display:contents;">
-      <label>Departamento:</label>
-      <select name="f_dept" onchange="this.form.submit()">
-        <option value="">Todos los departamentos</option>
-        <?php foreach ($departamentos as $d): ?>
-          <option value="<?= $d['id'] ?>" <?= $f_dept === (int)$d['id'] ? 'selected' : '' ?>><?= h($d['nombre']) ?></option>
-        <?php endforeach; ?>
-      </select>
-      <label>Estatus:</label>
-      <select name="f_estatus" onchange="this.form.submit()">
-        <option value="" <?= !$f_estatus ? 'selected' : '' ?>>Todos los estatus</option>
-        <?php foreach (['activo'=>'Activo','vacaciones'=>'Vacaciones','incapacidad'=>'Incapacidad','baja_temporal'=>'Baja Temporal','baja_definitiva'=>'Baja Definitiva'] as $vv=>$ll): ?>
-          <option value="<?= $vv ?>" <?= $f_estatus===$vv ? 'selected' : '' ?>><?= $ll ?></option>
-        <?php endforeach; ?>
-      </select>
-      <?php if ($f_dept || $f_estatus): ?>
-        <a href="empleados.php" class="btn-sm btn-muted">✕ Limpiar</a>
-      <?php endif; ?>
-    </form>
-    <div style="margin-left:auto;display:flex;gap:8px;">
-      <?php if (!$showForm): ?>
-        <a href="empleados_importar.php" class="btn-sm btn-muted">📤 Importar CSV</a>
-        <a href="empleados.php?form=1" class="btn-sm btn-primary">+ Nuevo empleado</a>
-      <?php endif; ?>
-    </div>
-  </div>
+<?php if ($showForm): /* ═══════════════════ FICHA (crear / editar) ═══════════════════ */ ?>
 
-  <!-- ── Formulario (crear / editar) ──────────────────────── -->
-  <?php if ($showForm): ?>
-  <div class="card">
-    <div class="card-header">
-      <h2><?= $editEmp ? '✏️ Editar empleado' : '➕ ' . ($fromAplicacion ? 'Contratar candidato' : 'Nuevo empleado') ?></h2>
-      <a href="empleados.php" class="btn-sm btn-muted">← Cancelar</a>
-    </div>
+  <div style="margin-bottom:14px"><a href="empleados.php" class="btn btn-ghost btn-sm">← Directorio</a></div>
 
-    <?php if ($fromAplicacion && !$editEmp): ?>
-    <div style="padding:0 20px;padding-top:16px;">
-      <div class="from-candidate-banner">
-        Contratando desde candidato: <strong><?= h($fromAplicacion['nombre']) ?></strong>
-        — <?= h($fromAplicacion['puesto_interes']) ?>.
-        Revisa y completa los datos antes de guardar.
+  <?php if ($editEmp && ($editEmp['registro_estado'] ?? null) === 'pendiente'): ?>
+  <div class="reg-review">
+    <?php if (!empty($editEmp['foto_referencia'])): ?>
+      <img src="<?= h(fotoUrl($editEmp)) ?>" alt="Selfie del registro">
+    <?php else: ?>
+      <span class="ref-img av"><?= h(iniciales($editEmp)) ?></span>
+    <?php endif ?>
+    <div>
+      <h3>Registro pendiente de aprobar</h3>
+      <p>Se registró desde la liga el <?= fdt($editEmp['registro_fecha']) ?> con el usuario
+         <strong><?= h($editEmp['portal_username']) ?></strong>. Confirma que la selfie es de esta persona:
+         con ella se verificará su identidad en cada check-in. Revisa también sus datos en las pestañas.</p>
+      <div class="acts">
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+          <input type="hidden" name="action" value="reg_aprobar">
+          <input type="hidden" name="id" value="<?= (int)$editEmp['id'] ?>">
+          <button type="submit" class="btn btn-primary">✓ Aprobar y activar acceso</button>
+        </form>
+        <form method="post" onsubmit="return confirm('¿Rechazar el registro? Se borran su selfie y su contraseña, y podrá registrarse de nuevo.')">
+          <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+          <input type="hidden" name="action" value="reg_rechazar">
+          <input type="hidden" name="id" value="<?= (int)$editEmp['id'] ?>">
+          <button type="submit" class="btn btn-danger">Rechazar</button>
+        </form>
       </div>
     </div>
+  </div>
+  <?php endif ?>
+
+  <div class="card" style="overflow:visible">
+    <?php if ($editEmp): ?>
+    <div class="ficha-head">
+      <?php if (!empty($editEmp['foto_referencia'])): ?>
+        <img class="av av-lg" src="<?= h(fotoUrl($editEmp)) ?>" alt="">
+      <?php else: ?>
+        <span class="av av-lg"><?= h(iniciales($editEmp)) ?></span>
+      <?php endif ?>
+      <div>
+        <h2><?= h(trim($editEmp['nombre'] . ' ' . $editEmp['apellido_paterno'] . ' ' . ($editEmp['apellido_materno'] ?? ''))) ?></h2>
+        <div class="ficha-meta">
+          <span class="num-emp" style="margin-left:0"><?= h($editEmp['numero_empleado']) ?></span>
+          <span><?= h($editEmp['puesto_nombre'] ?: 'Sin puesto') ?><?= $editEmp['dept_nombre'] ? ' · ' . h($editEmp['dept_nombre']) : '' ?></span>
+          <?= ebadge($editEmp['estatus']) ?>
+          <span>Ingreso <?= fd($editEmp['fecha_ingreso']) ?></span>
+        </div>
+      </div>
+      <?php if ($expOk): ?>
+      <div class="ficha-exp">
+        <small>Expediente (obligatorios)</small>
+        <?= $barra($expCubiertos, $avance['total']) ?>
+      </div>
+      <?php endif ?>
+    </div>
+    <?php else: ?>
+    <div class="card-header"><h2><?= $fromAplicacion ? 'Contratar candidato' : 'Nuevo empleado' ?></h2></div>
+    <?php endif ?>
+
+    <?php if ($fromAplicacion && !$editEmp): ?>
+      <div class="from-candidate-banner">
+        Contratando desde candidato: <strong><?= h($fromAplicacion['nombre']) ?></strong>
+        — <?= h($fromAplicacion['puesto_interes']) ?>. Revisa y completa los datos antes de guardar.
+      </div>
     <?php endif; ?>
 
-    <div class="form-wrap">
-      <form method="post" enctype="multipart/form-data">
-        <input type="hidden" name="csrf_token"    value="<?= h($csrf) ?>">
-        <input type="hidden" name="action"        value="save_empleado">
-        <input type="hidden" name="id"            value="<?= (int)($editEmp['id'] ?? 0) ?>">
-        <input type="hidden" name="aplicacion_id" value="<?= (int)$fromApId ?>">
+    <nav class="tabs" role="tablist">
+      <button type="button" class="tab" data-tab="personal">Datos personales</button>
+      <button type="button" class="tab" data-tab="laboral">Laboral</button>
+      <button type="button" class="tab" data-tab="bancario">Bancario</button>
+      <button type="button" class="tab" data-tab="portal">Portal y foto</button>
+      <button type="button" class="tab" data-tab="expediente"
+        <?= ($editEmp && $expOk) ? '' : 'disabled title="' . ($expOk ? 'Guarda primero al empleado para cargar su expediente' : 'Ejecuta db/migrate_expediente_v1.sql') . '"' ?>>
+        Expediente<?= ($editEmp && $expOk && $avance['total']) ? ' · ' . $expCubiertos . '/' . $avance['total'] : '' ?>
+      </button>
+    </nav>
+  </div>
 
-        <!-- ① Datos personales -->
+  <div class="card">
+    <form method="post" enctype="multipart/form-data" id="emp-form">
+      <input type="hidden" name="csrf_token"    value="<?= h($csrf) ?>">
+      <input type="hidden" name="action"        value="save_empleado">
+      <input type="hidden" name="id"            value="<?= (int)($editEmp['id'] ?? 0) ?>">
+      <input type="hidden" name="aplicacion_id" value="<?= (int)$fromApId ?>">
+      <input type="hidden" name="tab"           value="<?= h($tab) ?>" id="tab-input">
+
+      <!-- ═══ Datos personales ═══ -->
+      <section class="panel form-wrap" data-panel="personal">
         <div class="form-section">
-          <div class="form-section-title">① Datos personales</div>
+          <div class="form-section-title">Identidad</div>
           <div class="vf-grid">
             <div class="vf-field">
               <label>Nombre(s) *</label>
@@ -517,37 +796,35 @@ textarea.vf-inp{resize:vertical;}
           </div>
         </div>
 
-        <!-- ② Documentos oficiales -->
         <div class="form-section">
-          <div class="form-section-title">② Documentos oficiales</div>
+          <div class="form-section-title">Documentos oficiales</div>
           <div class="vf-grid">
             <div class="vf-field">
-              <label>CURP <span style="font-weight:400;color:#94a3b8;">(18 caracteres)</span></label>
+              <label>CURP <span>(18 caracteres)</span></label>
               <input type="text" name="curp" class="vf-inp" maxlength="18"
                      value="<?= $v('curp') ?>" placeholder="XXXX000000XXXXXX00"
                      style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
             </div>
             <div class="vf-field">
-              <label>RFC <span style="font-weight:400;color:#94a3b8;">(12-13 caracteres)</span></label>
+              <label>RFC <span>(12-13 caracteres)</span></label>
               <input type="text" name="rfc" class="vf-inp" maxlength="13"
                      value="<?= $v('rfc') ?>" placeholder="XXXX000000XXX"
                      style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
             </div>
             <div class="vf-field">
-              <label>NSS — IMSS <span style="font-weight:400;color:#94a3b8;">(11 dígitos)</span></label>
-              <input type="text" name="nss" class="vf-inp" maxlength="11"
+              <label>NSS — IMSS <span>(11 dígitos)</span></label>
+              <input type="text" name="nss" class="vf-inp" maxlength="11" inputmode="numeric"
                      value="<?= $v('nss') ?>" placeholder="00000000000">
             </div>
           </div>
         </div>
 
-        <!-- ③ Contacto y domicilio -->
         <div class="form-section">
-          <div class="form-section-title">③ Contacto y domicilio</div>
+          <div class="form-section-title">Contacto y domicilio</div>
           <div class="vf-grid">
             <div class="vf-field">
               <label>Teléfono</label>
-              <input type="text" name="telefono" class="vf-inp" value="<?= $v('telefono') ?>" placeholder="55 1234 5678">
+              <input type="tel" name="telefono" class="vf-inp" value="<?= $v('telefono') ?>" placeholder="55 1234 5678">
             </div>
             <div class="vf-field">
               <label>Correo personal</label>
@@ -555,11 +832,16 @@ textarea.vf-inp{resize:vertical;}
             </div>
             <div class="vf-field">
               <label>Correo corporativo</label>
-              <input type="email" name="email_corporativo" class="vf-inp" value="<?= $v('email_corporativo') ?>" placeholder="nombre@sharclean.com">
+              <input type="email" name="email_corporativo" class="vf-inp" value="<?= $v('email_corporativo') ?>" placeholder="nombre@empresa.com">
             </div>
             <div class="vf-field vf-span3">
               <label>Calle y número</label>
               <input type="text" name="direccion" class="vf-inp" value="<?= $v('direccion') ?>" placeholder="Calle, número exterior e interior">
+            </div>
+            <div class="vf-field">
+              <label>C.P.</label>
+              <input type="text" id="cp-input" name="cp" class="vf-inp" maxlength="5" inputmode="numeric" value="<?= $v('cp') ?>" placeholder="06600">
+              <span id="cp-status" style="font-size:11px;color:#94a3b8;"></span>
             </div>
             <div class="vf-field" id="colonia-wrap">
               <label>Colonia</label>
@@ -573,24 +855,21 @@ textarea.vf-inp{resize:vertical;}
               <label>Estado</label>
               <input type="text" id="estado-input" name="estado_residencia" class="vf-inp" value="<?= $v('estado_residencia') ?>">
             </div>
-            <div class="vf-field">
-              <label>C.P.</label>
-              <input type="text" id="cp-input" name="cp" class="vf-inp" maxlength="5" value="<?= $v('cp') ?>" placeholder="06600">
-              <span id="cp-status" style="font-size:11px;color:#94a3b8;"></span>
-            </div>
           </div>
         </div>
+      </section>
 
-        <!-- ④ Datos laborales -->
+      <!-- ═══ Laboral ═══ -->
+      <section class="panel form-wrap" data-panel="laboral">
         <div class="form-section">
-          <div class="form-section-title">④ Datos laborales</div>
+          <div class="form-section-title">Puesto y contrato</div>
           <div class="vf-grid">
             <div class="vf-field">
               <label>Departamento</label>
               <select name="departamento_id" class="vf-inp" id="sel-dept">
                 <option value="">— Sin asignar —</option>
                 <?php foreach ($departamentos as $d): ?>
-                  <option value="<?= $d['id'] ?>" <?= ((string)($pre['departamento_id'] ?? '')) === (string)$d['id'] ? 'selected' : '' ?>><?= h($d['nombre']) ?></option>
+                  <option value="<?= (int)$d['id'] ?>" <?= ((string)($pre['departamento_id'] ?? '')) === (string)$d['id'] ? 'selected' : '' ?>><?= h($d['nombre']) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
@@ -599,7 +878,7 @@ textarea.vf-inp{resize:vertical;}
               <select name="puesto_id" class="vf-inp" id="sel-puesto">
                 <option value="">— Sin asignar —</option>
                 <?php foreach ($puestos as $p): ?>
-                  <option value="<?= $p['id'] ?>" data-dept="<?= $p['departamento_id'] ?>"
+                  <option value="<?= (int)$p['id'] ?>" data-dept="<?= (int)$p['departamento_id'] ?>"
                     <?= ((string)($pre['puesto_id'] ?? '')) === (string)$p['id'] ? 'selected' : '' ?>>
                     <?= h($p['nombre']) ?>
                   </option>
@@ -607,7 +886,7 @@ textarea.vf-inp{resize:vertical;}
               </select>
             </div>
             <div class="vf-field">
-              <label>Puesto libre <span style="font-weight:400;color:#94a3b8;">(si no está en catálogo)</span></label>
+              <label>Puesto libre <span>(si no está en catálogo)</span></label>
               <input type="text" name="puesto_nombre" class="vf-inp" value="<?= $v('puesto_nombre') ?>" placeholder="Ej. Auxiliar de limpieza">
             </div>
             <div class="vf-field">
@@ -622,12 +901,12 @@ textarea.vf-inp{resize:vertical;}
               <input type="date" name="fecha_ingreso" class="vf-inp" required value="<?= $v('fecha_ingreso', date('Y-m-d')) ?>">
             </div>
             <div class="vf-field">
-              <label>Fin de contrato <span style="font-weight:400;color:#94a3b8;">(si aplica)</span></label>
+              <label>Fin de contrato <span>(si aplica)</span></label>
               <input type="date" name="fecha_fin_contrato" class="vf-inp" value="<?= $v('fecha_fin_contrato') ?>">
             </div>
             <div class="vf-field">
-              <label>Salario base mensual <span style="font-weight:400;color:#94a3b8;">(MXN bruto)</span></label>
-              <input type="number" name="salario_base" class="vf-inp" step="0.01" min="0"
+              <label>Salario base mensual <span>(MXN bruto)</span></label>
+              <input type="number" name="salario_base" class="vf-inp" step="0.01" min="0" inputmode="decimal"
                      value="<?= h((string)($pre['salario_base'] ?? '')) ?>" placeholder="0.00">
             </div>
             <div class="vf-field">
@@ -635,13 +914,19 @@ textarea.vf-inp{resize:vertical;}
               <?= sel('periodo_pago', ['semanal'=>'Semanal','quincenal'=>'Quincenal','mensual'=>'Mensual'], $pre['periodo_pago'] ?? 'quincenal') ?>
             </div>
             <div class="vf-field">
-              <label>Estatus laboral</label>
-              <?= sel('estatus', ['activo'=>'Activo','vacaciones'=>'Vacaciones','incapacidad'=>'Incapacidad','baja_temporal'=>'Baja temporal','baja_definitiva'=>'Baja definitiva'], $pre['estatus'] ?? 'activo') ?>
-            </div>
-            <div class="vf-field">
-              <label>Número de empleado <span style="font-weight:400;color:#94a3b8;">(auto si vacío)</span></label>
+              <label>Número de empleado <span>(auto si vacío)</span></label>
               <input type="text" name="numero_empleado" class="vf-inp"
                      value="<?= $v('numero_empleado') ?>" placeholder="EMP-0001">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title">Estatus</div>
+          <div class="vf-grid">
+            <div class="vf-field">
+              <label>Estatus laboral</label>
+              <?= sel('estatus', ['activo'=>'Activo','vacaciones'=>'Vacaciones','incapacidad'=>'Incapacidad','baja_temporal'=>'Baja temporal','baja_definitiva'=>'Baja definitiva'], $pre['estatus'] ?? 'activo') ?>
             </div>
             <div class="vf-field">
               <label>Fecha de baja</label>
@@ -654,49 +939,75 @@ textarea.vf-inp{resize:vertical;}
           </div>
         </div>
 
-        <!-- ⑤ Datos bancarios -->
         <div class="form-section">
-          <div class="form-section-title">⑤ Datos bancarios</div>
+          <div class="form-section-title">Notas internas</div>
+          <div class="vf-field">
+            <textarea name="notas" class="vf-inp" rows="3"
+              placeholder="Observaciones del reclutador, referencias, información adicional…"><?= $v('notas') ?></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ Bancario ═══ -->
+      <section class="panel form-wrap" data-panel="bancario">
+        <div class="form-section">
+          <div class="form-section-title">Datos bancarios para nómina</div>
           <div class="vf-grid-2">
             <div class="vf-field">
               <label>Banco</label>
               <input type="text" name="banco" class="vf-inp" value="<?= $v('banco') ?>" placeholder="BBVA, Santander, HSBC…">
             </div>
             <div class="vf-field">
-              <label>CLABE interbancaria <span style="font-weight:400;color:#94a3b8;">(18 dígitos)</span></label>
-              <input type="text" name="clabe_bancaria" class="vf-inp" maxlength="18"
+              <label>CLABE interbancaria <span>(18 dígitos)</span></label>
+              <input type="text" name="clabe_bancaria" class="vf-inp" maxlength="18" inputmode="numeric"
                      value="<?= $v('clabe_bancaria') ?>" placeholder="000000000000000000">
             </div>
           </div>
         </div>
+      </section>
 
-        <!-- ⑥ Portal del empleado (check-in) -->
+      <!-- ═══ Portal y foto ═══ -->
+      <section class="panel form-wrap" data-panel="portal">
         <div class="form-section">
-          <div class="form-section-title">⑥ Portal del empleado — check-in</div>
-          <div class="vf-grid">
-            <div class="vf-field">
-              <label>Foto de referencia <span style="font-weight:400;color:#94a3b8;">(para verificar la selfie del check-in)</span></label>
-              <?php if (!empty($pre['foto_referencia'])): ?>
-                <div style="margin-bottom:6px;">
-                  <img src="empleado_foto.php?emp=<?= (int)($editEmp['id'] ?? 0) ?>" alt="Foto actual"
-                       style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1.5px solid #e2e8f0;">
-                </div>
-              <?php endif; ?>
-              <input type="file" name="foto_referencia" class="vf-inp" accept="image/jpeg,image/png">
+          <div class="form-section-title">Foto de referencia — verificación facial del check-in</div>
+          <div class="ref-box" id="ref-photo"
+               data-faceapi="../portal/assets/face-api/face-api.min.js"
+               data-weights="../portal/assets/face-api/weights">
+            <?php if (!empty($pre['foto_referencia']) && $editEmp): ?>
+              <img class="ref-img" id="ref-preview" src="<?= h(fotoUrl($editEmp)) ?>" alt="Foto de referencia">
+            <?php else: ?>
+              <span class="ref-img" id="ref-initials"><?= h($editEmp ? iniciales($editEmp) : '?') ?></span>
+              <img class="ref-img" id="ref-preview" alt="" hidden>
+            <?php endif ?>
+            <div class="ref-actions">
+              <div class="btns">
+                <button type="button" class="btn btn-primary" id="ref-cam-btn">📷 Tomar foto con cámara</button>
+                <label class="btn btn-ghost">Subir foto<input type="file" id="ref-file" accept="image/*" hidden></label>
+              </div>
+              <p>De frente, sin lentes oscuros ni gorra, con buena luz y solo el empleado en la foto.
+                 Antes de aceptarla se verifica que se detecte un rostro claro.</p>
+              <span id="ref-status" aria-live="polite"></span>
+              <input type="file" name="foto_referencia" id="foto_referencia" accept="image/jpeg" hidden>
             </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title">Acceso al portal del empleado</div>
+          <div class="vf-grid">
             <div class="vf-field">
               <label>Usuario de portal</label>
               <input type="text" name="portal_username" class="vf-inp" maxlength="50"
                      value="<?= $v('portal_username') ?>" placeholder="nombre.apellido" autocomplete="off">
             </div>
             <div class="vf-field">
-              <label>Nueva contraseña <span style="font-weight:400;color:#94a3b8;">(dejar vacío para no cambiar)</span></label>
+              <label>Nueva contraseña <span>(vacío = no cambiar)</span></label>
               <input type="password" name="portal_password" class="vf-inp" autocomplete="new-password" placeholder="••••••••">
             </div>
             <div class="vf-field">
-              <label>PIN alterno <span style="font-weight:400;color:#94a3b8;">(4-6 dígitos, para empleados con impedimento)</span></label>
-              <input type="text" name="portal_pin" class="vf-inp" maxlength="6" inputmode="numeric"
-                     autocomplete="off" placeholder="Dejar vacío para no cambiar">
+              <label>PIN alterno <span>(4-6 dígitos)</span></label>
+              <input type="text" name="portal_pin" class="vf-inp" maxlength="6" inputmode="numeric" pattern="\d{4,6}"
+                     autocomplete="off" placeholder="Vacío = no cambiar">
             </div>
             <div class="vf-field">
               <label>Acceso al portal</label>
@@ -704,127 +1015,358 @@ textarea.vf-inp{resize:vertical;}
             </div>
           </div>
         </div>
+      </section>
 
-        <!-- ⑦ Notas internas -->
-        <div class="form-section">
-          <div class="form-section-title">⑦ Notas internas</div>
-          <div class="vf-field">
-            <label>Notas del expediente</label>
-            <textarea name="notas" class="vf-inp" rows="3"
-              placeholder="Observaciones del reclutador, referencias, información adicional…"><?= $v('notas') ?></textarea>
+      <div class="save-bar" id="save-bar">
+        <button type="submit" class="btn btn-primary"><?= $editEmp ? 'Guardar cambios' : 'Crear empleado' ?></button>
+        <a href="empleados.php" class="btn btn-ghost">Cancelar</a>
+        <?php if ($editEmp): ?>
+          <span class="meta">
+            Creado <?= fdt($editEmp['fecha_creacion']) ?>
+            <?= $editEmp['fecha_actualiza'] ? '· Actualizado ' . fdt($editEmp['fecha_actualiza']) : '' ?>
+          </span>
+        <?php endif; ?>
+      </div>
+    </form>
+
+    <?php if ($editEmp && $expOk): ?>
+    <!-- ═══ Expediente (fuera del formulario principal: cada documento tiene su propio formulario) ═══ -->
+    <section class="panel" data-panel="expediente">
+      <div class="exp-intro">
+        <span>PDF o fotos (JPG, PNG). Desde el celular puedes fotografiar el documento directamente; las fotos se comprimen antes de subir.</span>
+        <span class="spacer"></span>
+        <a href="documentos_catalogo.php" class="btn btn-ghost btn-sm">Configurar catálogo</a>
+      </div>
+
+      <?php
+      $cat = null;
+      foreach ($tiposDoc as $t):
+        $docs = $docsPorTipo[(int)$t['id']] ?? [];
+        if ($t['categoria'] !== $cat): ?>
+          <?php if ($cat !== null): ?></div><?php endif; $cat = $t['categoria']; ?>
+          <div class="exp-cat"><h4><?= h($cat) ?></h4>
+        <?php endif;
+        $estado = $docs ? 'ok' : ($t['obligatorio'] ? 'req' : 'opt'); ?>
+        <div class="doc">
+          <span class="doc-state <?= $estado ?>"><?= $docs ? '✓' : ($t['obligatorio'] ? '!' : '·') ?></span>
+          <div>
+            <div class="doc-name"><?= h($t['nombre']) ?><?php if ($t['obligatorio'] && !$docs): ?><span class="tag">Pendiente</span><?php endif ?></div>
+            <?php if ($t['descripcion']): ?><div class="doc-desc"><?= h($t['descripcion']) ?></div><?php endif ?>
+            <?php if ($docs): ?><div class="files"><?php foreach ($docs as $d) include __DIR__ . '/_documento_archivo.php'; ?></div><?php endif ?>
           </div>
+          <form method="post" enctype="multipart/form-data" class="up-btn">
+            <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+            <input type="hidden" name="action" value="doc_upload">
+            <input type="hidden" name="id" value="<?= (int)$editEmp['id'] ?>">
+            <input type="hidden" name="tipo_id" value="<?= (int)$t['id'] ?>">
+            <label class="btn <?= $docs ? 'btn-ghost' : 'btn-primary' ?> btn-sm">
+              <?= $docs ? '+ Agregar' : 'Subir' ?>
+              <input type="file" name="documento[]" multiple accept="application/pdf,image/*" data-compress="2000" data-autosubmit>
+            </label>
+          </form>
         </div>
+      <?php endforeach; ?>
+      <?php if ($cat !== null): ?></div><?php endif ?>
 
-        <div class="form-actions">
-          <button type="submit" class="btn-sm btn-primary">
-            💾 <?= $editEmp ? 'Guardar cambios' : 'Crear empleado' ?>
-          </button>
-          <a href="empleados.php" class="btn-sm btn-muted">Cancelar</a>
-          <?php if ($editEmp): ?>
-            <span style="font-size:12px;color:#94a3b8;margin-left:auto;">
-              Creado <?= fdt($editEmp['fecha_creacion']) ?>
-              <?= $editEmp['fecha_actualiza'] ? '· Actualizado ' . fdt($editEmp['fecha_actualiza']) : '' ?>
-            </span>
-          <?php endif; ?>
-        </div>
-      </form>
+      <div class="exp-cat">
+        <h4>Documentos adicionales</h4>
+        <?php if ($docsExtra): ?>
+          <div class="doc"><span class="doc-state opt">·</span>
+            <div class="files" style="margin-top:0"><?php foreach ($docsExtra as $d) include __DIR__ . '/_documento_archivo.php'; ?></div>
+          </div>
+        <?php endif ?>
+        <form method="post" enctype="multipart/form-data" class="extra-form">
+          <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+          <input type="hidden" name="action" value="doc_upload">
+          <input type="hidden" name="id" value="<?= (int)$editEmp['id'] ?>">
+          <input type="text" name="doc_nombre" class="vf-inp" maxlength="150" required placeholder="Nombre del documento (ej. Constancia de curso de seguridad)">
+          <label class="btn btn-ghost">Elegir archivo(s)
+            <input type="file" name="documento[]" multiple accept="application/pdf,image/*" data-compress="2000" hidden>
+          </label>
+          <button type="submit" class="btn btn-primary">Subir</button>
+        </form>
+      </div>
+    </section>
+    <?php endif ?>
+  </div>
+
+  <dialog id="cam-dialog">
+    <div class="cam-stage">
+      <video id="cam-video" playsinline muted></video>
+      <div class="cam-oval"></div>
+    </div>
+    <div class="cam-foot">
+      <div id="cam-msg" aria-live="polite"></div>
+      <div class="cam-btns">
+        <button type="button" class="btn btn-ghost" id="cam-cancel">Cancelar</button>
+        <button type="button" class="btn btn-ghost" id="cam-switch">↺ Cambiar cámara</button>
+        <button type="button" class="btn btn-primary" id="cam-capture">Capturar</button>
+      </div>
+    </div>
+  </dialog>
+
+<?php else: /* ═══════════════════ DIRECTORIO ═══════════════════ */ ?>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-val"><?= $cActivos ?></div>
+      <div class="stat-lbl">Empleados activos</div>
+      <div class="stat-sub"><?= $cTotal ?> registrados</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val"><?= $cIncid ?></div>
+      <div class="stat-lbl">Con incidencia</div>
+      <div class="stat-sub">Vacaciones / Incapacidad / Baja temp.</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val"><?= $cBajas ?></div>
+      <div class="stat-lbl">Bajas definitivas</div>
+      <div class="stat-sub">&nbsp;</div>
+    </div>
+    <div class="stat">
+      <?php
+        $completos = 0;
+        foreach ($empleados as $e) if ($avance['total'] && ($avance['por_empleado'][(int)$e['id']] ?? 0) >= $avance['total']) $completos++;
+      ?>
+      <div class="stat-val"><?= $expOk ? $completos . '<span class="muted" style="font-size:18px">/' . count($empleados) . '</span>' : '—' ?></div>
+      <div class="stat-lbl">Expedientes completos</div>
+      <div class="stat-sub"><?= $expOk ? 'Del listado actual' : 'Expediente sin habilitar' ?></div>
     </div>
   </div>
-  <?php endif; ?>
 
-  <!-- ── Tabla de empleados ───────────────────────────────── -->
-  <div class="card">
-    <div class="card-header">
-      <h2>Directorio de empleados</h2>
-      <?php if (!$showForm): ?>
-        <a href="empleados.php?form=1" class="btn-sm btn-primary">+ Nuevo empleado</a>
-      <?php endif; ?>
+  <?php if ($regPend > 0 && !$f_registro): ?>
+    <div class="alert alert-info" style="background:#fffbeb;border-color:#fde68a;color:#92400e">
+      <strong><?= $regPend ?></strong> empleado(s) completaron su registro desde la liga y esperan que apruebes su selfie.
+      <a href="empleados.php?f_registro=pendiente" style="font-weight:700;text-decoration:underline;margin-left:6px">Revisar</a>
     </div>
+  <?php elseif ($f_registro): ?>
+    <div class="alert alert-info">Mostrando solo registros pendientes de aprobar. <a href="empleados.php" style="font-weight:700;text-decoration:underline">Ver todos</a></div>
+  <?php endif ?>
 
+  <?php if (!$expOk): ?>
+    <div class="alert alert-info">Para habilitar el expediente digital ejecuta <code>db/migrate_expediente_v1.sql</code>.</div>
+  <?php endif ?>
+
+  <div class="toolbar">
+    <label class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="emp-search" placeholder="Buscar por nombre, número, puesto…" aria-label="Buscar empleado">
+    </label>
+    <form method="get" style="display:contents">
+      <select name="f_dept" onchange="this.form.submit()" aria-label="Departamento">
+        <option value="">Todos los departamentos</option>
+        <?php foreach ($departamentos as $d): ?>
+          <option value="<?= (int)$d['id'] ?>" <?= $f_dept === (int)$d['id'] ? 'selected' : '' ?>><?= h($d['nombre']) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <select name="f_estatus" onchange="this.form.submit()" aria-label="Estatus">
+        <option value="" <?= !$f_estatus ? 'selected' : '' ?>>Todos los estatus</option>
+        <?php foreach (['activo'=>'Activo','vacaciones'=>'Vacaciones','incapacidad'=>'Incapacidad','baja_temporal'=>'Baja Temporal','baja_definitiva'=>'Baja Definitiva'] as $vv=>$ll): ?>
+          <option value="<?= $vv ?>" <?= $f_estatus===$vv ? 'selected' : '' ?>><?= $ll ?></option>
+        <?php endforeach; ?>
+      </select>
+      <?php if ($f_dept || $f_estatus): ?><a href="empleados.php" class="btn btn-ghost btn-sm">✕ Limpiar</a><?php endif; ?>
+    </form>
+    <span class="spacer"></span>
+    <?php if ($expOk): ?><a href="documentos_catalogo.php" class="btn btn-ghost">Catálogo de documentos</a><?php endif ?>
+    <?php if ($regOk): ?><button type="button" class="btn btn-ghost" id="liga-btn">🔗 Liga de registro</button><?php endif ?>
+    <a href="empleados_importar.php" class="btn btn-ghost">Importar CSV</a>
+    <a href="empleados.php?form=1" class="btn btn-primary">+ Nuevo empleado</a>
+  </div>
+
+  <div class="card">
     <?php if (empty($empleados)): ?>
       <div class="empty">
-        No hay empleados registrados todavía.
-        <br><a href="empleados.php?form=1" style="color:#0284C7;display:inline-block;margin-top:8px;">Registrar el primero</a>
+        No hay empleados con estos filtros.
+        <br><a href="empleados.php?form=1" style="color:var(--brand);display:inline-block;margin-top:8px;">Registrar empleado</a>
       </div>
     <?php else: ?>
-    <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>#</th>
-            <th>N° Emp</th>
-            <th>Nombre completo</th>
+            <th>Empleado</th>
             <th>Puesto / Área</th>
             <th>Contrato</th>
-            <th>Salario base</th>
             <th>Ingreso</th>
+            <?php if ($expOk): ?><th>Expediente</th><?php endif ?>
             <th>Estatus</th>
-            <th>Acciones</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
-        <?php foreach ($empleados as $e): ?>
-          <tr>
-            <td style="color:#94a3b8;font-size:12px;"><?= $e['id'] ?></td>
-            <td><span class="num-emp"><?= h($e['numero_empleado']) ?></span></td>
+        <?php foreach ($empleados as $e):
+          $nomCompleto = trim($e['nombre'] . ' ' . $e['apellido_paterno'] . ' ' . ($e['apellido_materno'] ?? ''));
+          $buscar = mb_strtolower($nomCompleto . ' ' . $e['numero_empleado'] . ' ' . $e['puesto_nombre'] . ' ' . $e['dept_nombre'] . ' ' . $e['telefono'] . ' ' . $e['email']); ?>
+          <tr data-href="empleados.php?edit=<?= (int)$e['id'] ?>" data-search="<?= h($buscar) ?>">
             <td>
-              <strong><?= h($e['nombre'] . ' ' . $e['apellido_paterno'] . ($e['apellido_materno'] ? ' ' . $e['apellido_materno'] : '')) ?></strong>
-              <?php if ($e['email'] || $e['telefono']): ?>
-                <div style="font-size:11px;color:#94a3b8;margin-top:2px;">
-                  <?= $e['telefono'] ? h($e['telefono']) : '' ?>
-                  <?= ($e['telefono'] && $e['email']) ? ' · ' : '' ?>
-                  <?= $e['email'] ? '<a href="mailto:' . h($e['email']) . '" style="color:#0284C7;">' . h($e['email']) . '</a>' : '' ?>
+              <div class="who">
+                <?php if (!empty($e['foto_referencia'])): ?>
+                  <img class="av" src="<?= h(fotoUrl($e)) ?>" alt="" loading="lazy">
+                <?php else: ?>
+                  <span class="av"><?= h(iniciales($e)) ?></span>
+                <?php endif ?>
+                <div>
+                  <strong><?= h($nomCompleto) ?><span class="num-emp"><?= h($e['numero_empleado']) ?></span></strong>
+                  <small><?= h($e['telefono'] ?: ($e['email'] ?: '')) ?></small>
                 </div>
-              <?php endif; ?>
+              </div>
             </td>
             <td>
               <?= h($e['puesto_nombre'] ?: '—') ?>
-              <?php if ($e['dept_nombre']): ?>
-                <div style="font-size:11px;color:#94a3b8;"><?= h($e['dept_nombre']) ?></div>
-              <?php endif; ?>
+              <?php if ($e['dept_nombre']): ?><div style="font-size:12px;color:#94a3b8;"><?= h($e['dept_nombre']) ?></div><?php endif; ?>
             </td>
             <td><?= ctbadge($e['tipo_contrato']) ?></td>
-            <td style="font-size:13px;font-weight:600;color:#0f172a;"><?= money($e['salario_base']) ?></td>
-            <td style="white-space:nowrap;font-size:12px;color:#64748b;"><?= fd($e['fecha_ingreso']) ?></td>
-            <td><?= ebadge($e['estatus']) ?></td>
-            <td style="white-space:nowrap;">
-              <a href="empleados.php?edit=<?= $e['id'] ?>" class="btn-sm btn-muted" style="margin-right:3px;">✏️ Editar</a>
-              <!-- Toggle baja -->
-              <form method="post" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
-                <input type="hidden" name="action" value="toggle_baja">
-                <input type="hidden" name="id"     value="<?= (int)$e['id'] ?>">
-                <button type="submit" class="btn-sm <?= $e['estatus']==='baja_definitiva' ? 'btn-success' : 'btn-muted' ?>"
-                        onclick="return confirm('<?= $e['estatus']==='baja_definitiva' ? '¿Reactivar empleado?' : '¿Dar de baja a este empleado?' ?>')">
-                  <?= $e['estatus']==='baja_definitiva' ? '▶ Reactivar' : '⏹ Dar baja' ?>
-                </button>
-              </form>
-              <!-- Eliminar (solo si ya está en baja definitiva) -->
-              <?php if ($e['estatus'] === 'baja_definitiva'): ?>
-              <form method="post" style="display:inline;margin-left:3px;">
-                <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
-                <input type="hidden" name="action" value="del_empleado">
-                <input type="hidden" name="id"     value="<?= (int)$e['id'] ?>">
-                <button type="submit" class="btn-sm btn-danger"
-                        onclick="return confirm('¿Eliminar permanentemente a <?= h(addslashes($e['nombre'])) ?>? Esta acción no se puede deshacer.')">
-                  🗑
-                </button>
-              </form>
-              <?php else: ?>
-              <span title="Dar de baja al empleado antes de eliminar" style="display:inline-block;margin-left:3px;opacity:.35;cursor:not-allowed;font-size:1rem;">🗑</span>
-              <?php endif; ?>
+            <td style="white-space:nowrap;font-size:13px;color:#64748b;"><?= fd($e['fecha_ingreso']) ?></td>
+            <?php if ($expOk): ?><td style="white-space:nowrap"><?= $barra($avance['por_empleado'][(int)$e['id']] ?? 0, $avance['total']) ?></td><?php endif ?>
+            <td><?= ebadge($e['estatus']) ?><?php if (($e['registro_estado'] ?? null) === 'pendiente'): ?><span class="badge b-reg">Por aprobar</span><?php endif ?></td>
+            <td>
+              <div class="row-actions">
+                <a href="empleados.php?edit=<?= (int)$e['id'] ?>" class="btn btn-ghost btn-sm">Abrir</a>
+                <form method="post">
+                  <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+                  <input type="hidden" name="action" value="toggle_baja">
+                  <input type="hidden" name="id"     value="<?= (int)$e['id'] ?>">
+                  <button type="submit" class="btn btn-sm <?= $e['estatus']==='baja_definitiva' ? 'btn-success' : 'btn-ghost' ?>"
+                          onclick="return confirm('<?= $e['estatus']==='baja_definitiva' ? '¿Reactivar empleado?' : '¿Dar de baja a este empleado?' ?>')">
+                    <?= $e['estatus']==='baja_definitiva' ? 'Reactivar' : 'Dar baja' ?>
+                  </button>
+                </form>
+                <?php if ($e['estatus'] === 'baja_definitiva'): ?>
+                <form method="post">
+                  <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+                  <input type="hidden" name="action" value="del_empleado">
+                  <input type="hidden" name="id"     value="<?= (int)$e['id'] ?>">
+                  <button type="submit" class="btn btn-danger btn-sm" title="Eliminar definitivamente (incluye su expediente)"
+                          onclick="return confirm(<?= h(json_encode('¿Eliminar permanentemente a ' . $nomCompleto . ' y todo su expediente? Esta acción no se puede deshacer.', JSON_HEX_QUOT | JSON_HEX_APOS | JSON_HEX_TAG | JSON_HEX_AMP)) ?>)">
+                    Eliminar
+                  </button>
+                </form>
+                <?php endif; ?>
+              </div>
             </td>
           </tr>
         <?php endforeach; ?>
         </tbody>
       </table>
-    </div>
+      <div class="empty" id="search-empty" hidden>Ningún empleado coincide con la búsqueda.</div>
     <?php endif; ?>
   </div>
 
+<?php endif; ?>
+
 </div><!-- /body -->
 
+<?php if (!$showForm && $regOk): ?>
+<dialog id="liga-dialog">
+  <div class="liga-head">
+    <h3>Liga de registro de empleados</h3>
+    <button type="button" class="btn btn-ghost btn-sm" id="liga-cerrar" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="liga-body">
+    <span class="liga-estado <?= $regActiva ? 'on' : '' ?>"><i></i><?= $regActiva ? 'Activa' : 'Desactivada' ?></span>
+    <p>Compártela con el personal ya dado de alta. Para activar su cuenta cada empleado necesita su
+       <strong>número de empleado</strong> y el <strong>teléfono o correo</strong> registrado en su ficha
+       (si tiene correo, además recibe un código). Captura sus datos, su selfie y su contraseña, y queda
+       <strong>pendiente</strong> hasta que apruebes su selfie aquí.</p>
+    <?php if ($regActiva): ?>
+      <div class="liga-url">
+        <input type="text" class="vf-inp" id="liga-url" readonly value="<?= h($regUrl) ?>">
+        <button type="button" class="btn btn-primary" id="liga-copiar">Copiar</button>
+      </div>
+      <a class="btn btn-ghost" target="_blank" rel="noopener noreferrer"
+         href="https://wa.me/?text=<?= rawurlencode('Activa tu cuenta del portal de empleados de ' . appConfig('empresa_nombre', 'la empresa') . ' (necesitas tu número de empleado): ' . $regUrl) ?>">
+        Compartir por WhatsApp
+      </a>
+    <?php endif ?>
+    <div class="liga-acts">
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+        <input type="hidden" name="action" value="reg_liga">
+        <input type="hidden" name="op" value="<?= $regActiva ? 'desactivar' : 'activar' ?>">
+        <button type="submit" class="btn <?= $regActiva ? 'btn-danger' : 'btn-primary' ?>"><?= $regActiva ? 'Desactivar liga' : 'Activar liga' ?></button>
+      </form>
+      <?php if ($regActiva): ?>
+      <form method="post" onsubmit="return confirm('¿Generar una liga nueva? La actual dejará de funcionar para quien la tenga.')">
+        <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+        <input type="hidden" name="action" value="reg_liga">
+        <input type="hidden" name="op" value="rotar">
+        <button type="submit" class="btn btn-ghost">Generar liga nueva</button>
+      </form>
+      <?php endif ?>
+    </div>
+    <p style="font-size:12px;color:#94a3b8">Si la liga se compartió de más, genera una nueva o desactívala.
+       Acceso al portal para quien ya está activo: <strong><?= h(appBaseUrl() . '/portal/login.php') ?></strong></p>
+  </div>
+</dialog>
 <script>
+(function () {
+  const dlg = document.getElementById('liga-dialog');
+  document.getElementById('liga-btn').addEventListener('click', () => dlg.showModal());
+  document.getElementById('liga-cerrar').addEventListener('click', () => dlg.close());
+  const copiar = document.getElementById('liga-copiar');
+  copiar && copiar.addEventListener('click', function () {
+    const inp = document.getElementById('liga-url');
+    (navigator.clipboard ? navigator.clipboard.writeText(inp.value) : Promise.reject())
+      .catch(() => { inp.select(); document.execCommand('copy'); })
+      .finally(() => { copiar.textContent = '¡Copiada!'; setTimeout(() => copiar.textContent = 'Copiar', 2000); });
+  });
+  if (new URLSearchParams(location.search).has('liga')) dlg.showModal();
+})();
+</script>
+<?php endif ?>
+<script src="assets/img-compress.js?v=2"></script>
+<?php if ($showForm): ?><script src="assets/foto-referencia.js?v=2"></script><?php endif ?>
+<script>
+/* ── Directorio: búsqueda instantánea y fila clicable ── */
+(function () {
+  const input = document.getElementById('emp-search');
+  if (input) {
+    const rows  = Array.from(document.querySelectorAll('tbody tr[data-search]'));
+    const empty = document.getElementById('search-empty');
+    input.addEventListener('input', function () {
+      const q = this.value.trim().toLowerCase();
+      let visibles = 0;
+      rows.forEach(r => { const ok = !q || r.dataset.search.includes(q); r.hidden = !ok; if (ok) visibles++; });
+      if (empty) empty.hidden = visibles > 0;
+    });
+  }
+  document.querySelectorAll('tbody tr[data-href]').forEach(function (tr) {
+    tr.addEventListener('click', function (e) {
+      if (e.target.closest('a,button,form,input,select')) return;
+      location.href = tr.dataset.href;
+    });
+  });
+})();
+
+/* ── Ficha: pestañas ── */
+(function () {
+  const tabs = document.querySelectorAll('.tab[data-tab]');
+  if (!tabs.length) return;
+  const panels  = document.querySelectorAll('.panel[data-panel]');
+  const tabIn   = document.getElementById('tab-input');
+  const saveBar = document.getElementById('save-bar');
+
+  function show(name) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    panels.forEach(p => p.classList.toggle('active', p.dataset.panel === name));
+    if (tabIn) tabIn.value = name;
+    if (saveBar) saveBar.hidden = name === 'expediente';
+    const url = new URL(location.href);
+    url.searchParams.set('tab', name);
+    history.replaceState(null, '', url);
+  }
+  tabs.forEach(t => t.addEventListener('click', () => { if (!t.disabled) show(t.dataset.tab); }));
+  show(<?= json_encode($tab) ?>);
+
+  // Un campo obligatorio en otra pestaña: mostrar esa pestaña para que el navegador marque el error
+  const form = document.getElementById('emp-form');
+  form && form.addEventListener('invalid', function (e) {
+    const panel = e.target.closest('.panel[data-panel]');
+    if (panel && !panel.classList.contains('active')) show(panel.dataset.panel);
+  }, true);
+})();
+
+/* ── Departamento / puesto ── */
 (function() {
   const deptSel   = document.getElementById('sel-dept');
   const puestoSel = document.getElementById('sel-puesto');

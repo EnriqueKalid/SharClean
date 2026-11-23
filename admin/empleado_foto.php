@@ -40,4 +40,6 @@ $types = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png'];
 header('Content-Type: ' . ($types[$ext] ?? 'application/octet-stream'));
 header('Content-Disposition: inline; filename="' . $filename . '"');
 header('Content-Length: ' . filesize($path));
+// Con ?v= (cambia cada vez que se sube otra foto) el navegador puede reutilizarla
+header(isset($_GET['v']) ? 'Cache-Control: private, max-age=604800' : 'Cache-Control: private, no-store');
 readfile($path);

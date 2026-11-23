@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__ . '/_boot.php';
 
 session_unset();
 session_destroy();

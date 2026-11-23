@@ -14,7 +14,7 @@ Single-tenant, solo uso interno.
 | Archivo | Rol |
 |---|---|
 | `admin/index.php` | Panel principal: Contactos, Cotizaciones, Aplicaciones, Vacantes |
-| `admin/empleados.php` | CRUD completo de empleados |
+| `admin/empleados.php` | Directorio (búsqueda, avance de expediente) + ficha con pestañas: Datos personales, Laboral, Bancario, Portal y foto, Expediente |
 | `admin/asistencia.php` | Módulo de asistencia (vista día, resumen mensual, incidencias) |
 | `admin/login.php` | Login con credenciales desde `.env` |
 | `admin/auth.php` | Guard de sesión + `getAdminDB()` |
@@ -41,7 +41,17 @@ Single-tenant, solo uso interno.
 | `admin/mi_perfil.php` | El usuario sube/quita su foto de perfil (cualquier usuario autenticado) |
 | `admin/usuario_foto.php` | Sirve la foto de un usuario admin (la propia, u otras con permiso `usuarios`) |
 | `db/security.php` | `startSecureSession()`, `sendSecurityHeaders()` (CSP, anti-clickjacking), `appBaseUrl()` (usa `APP_URL` del `.env`) |
-| `db/foto_upload.php` | `procesarFotoPerfil()` — valida firma real de la imagen y la re-codifica con GD (quita EXIF/payloads) |
+| `db/foto_upload.php` | `procesarImagen()` (+ `procesarFotoPerfil`, `procesarFotoReferencia` 800 px, `procesarLogo`) — valida firma real y re-codifica con GD (quita EXIF/payloads, corrige rotación) |
+| `admin/documentos_catalogo.php` | Catálogo configurable de documentos del expediente (categoría, obligatorio, orden, activo) |
+| `admin/empleado_documento.php` | Sirve un documento del expediente (protegido, `?dl=1` descarga) |
+| `db/expediente.php` | Helpers del expediente: guardar (PDF por firma `%PDF-`, imágenes re-codificadas ≤2000 px), listar, avance, eliminar |
+| `admin/assets/img-compress.js` | Comprime imágenes en el navegador antes de subir (`data-compress="px"`, `data-autosubmit`) |
+| `admin/assets/foto-referencia.js` | Cámara + validación facial (face-api del portal) de la foto de referencia del empleado |
+| `portal/registro.php` | Liga general de autorregistro: número de empleado + tel/correo de la ficha → código por correo (si tiene) → datos, selfie y contraseña; queda pendiente de aprobación |
+| `db/registro.php` | Helpers del autorregistro (liga/clave rotable, pendientes, normalizar teléfono) |
+| `portal/_boot.php` / `portal/_head.php` | Arranque del portal (sesión segura, cabeceras con cámara+GPS) y `<head>` común (app instalable) |
+| `portal/manifest.php` / `portal/icono.php` / `portal/sw.js` | Portal instalable como app (íconos desde el logo de Configuración; el SW no cachea nada) |
+| `db/cp_lookup.php` | `buscarCodigoPostal()` compartido por `admin/cp_lookup.php` y `portal/cp_lookup.php` (este solo con registro en curso) |
 
 ## Reglas de seguridad del panel (Admin 2.0)
 
@@ -108,16 +118,18 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 7. `db/migrate_chatbot_v1.sql` ✅
 8. `db/migrate_usuarios_v1.sql` ✅
 9. `db/migrate_reset_tokens_v1.sql` ✅
-10. `db/migrate_checkin_v1.sql` ⏳ pendiente de ejecutar en servidor (`sharclea_dbapp`)
+10. `db/migrate_checkin_v1.sql` ✅
 11. `db/migrate_codigos_postales_v1.sql` ⏳ pendiente — luego importar el catálogo desde Configuración → Códigos postales
-12. `db/migrate_admin_v2.sql` ⏳ pendiente (columna `admin_usuarios.foto` + tabla `admin_login_intentos`)
+12. `db/migrate_admin_v2.sql` ✅
+13. `db/migrate_expediente_v1.sql` ⏳ pendiente (`documento_tipos` con catálogo base + `empleado_documentos`)
+14. `db/migrate_registro_v1.sql` ⏳ pendiente (`empleados.registro_*`, `intentos_acceso`, config de la liga)
 
 ## Estado de módulos RRHH
 
 | Módulo | Archivo | Estado |
 |---|---|---|
 | Reclutamiento (vacantes + candidatos) | `admin/index.php` tabs Vacantes y Aplicaciones | ✅ Completo |
-| Expediente empleados | `admin/empleados.php` | ✅ Completo |
+| Expediente empleados | `admin/empleados.php` | ✅ Completo — expediente digital pendiente de `migrate_expediente_v1.sql` |
 | Asistencia | `admin/asistencia.php` | ✅ Completo |
 | Nómina | `admin/nomina.php` | ✅ Completo |
 | Vacaciones y Permisos | `admin/vacaciones.php` + `solicitar.php` | ✅ Completo |
@@ -125,7 +137,7 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 | Reportes | `admin/reportes.php` | ✅ Completo |
 | Configuración | `admin/configuracion.php` | ✅ Completo |
 | Usuarios y Perfiles | `admin/usuarios.php` | ✅ Completo (requiere ejecutar migrate_usuarios_v1.sql) |
-| Check-in de empleados (portal self-service) | `portal/*` + `admin/empleados.php` (foto/credenciales) + `admin/asistencia.php` (auditoría) | ✅ Código completo — pendiente ejecutar `migrate_checkin_v1.sql` y probar en servidor (HTTPS, cámara/GPS reales) |
+| Check-in de empleados (portal self-service) | `portal/*` + `admin/empleados.php` (foto/credenciales) + `admin/asistencia.php` (auditoría) | ✅ Completo — autorregistro por liga (`portal/registro.php`) pendiente de `migrate_registro_v1.sql` |
 
 ## Siguiente módulo a desarrollar: Portal de vacaciones/incapacidades/permisos
 
@@ -176,3 +188,26 @@ check-in a un radio permitido alrededor de la oficina/sitio de trabajo).
   distinguibles de `'Admin'`/`'Bulk-Admin'`/`'Sistema'`.
 - Selfies y foto de referencia se sirven solo vía scripts protegidos (nunca acceso directo
   a `/uploads/` — bloqueado por `uploads/.htaccess`), mismo patrón que `admin/cv.php`.
+
+## Notas del expediente digital
+
+- Archivos en `uploads/expedientes/{empleado_id}/doc_<aleatorio>.{pdf,jpg}`; nunca acceso directo.
+  Al eliminar un empleado (solo en baja definitiva) se borran su foto de referencia y su expediente.
+- Varios archivos por tipo (ej. INE frente/reverso). Tipo NULL = "documento adicional" con nombre libre.
+- Avance = tipos **obligatorios y activos** con al menos un archivo.
+- Foto de referencia: se captura con cámara en la ficha (pestaña "Portal y foto"), face-api exige
+  exactamente un rostro ≥20% del ancho y score ≥0.7; se sube a ≤800 px (~100 KB). Requiere HTTPS
+  (Permissions-Policy `camera=(self)` en el panel).
+- Logo del sistema: `images/brand/` (público, solo imágenes por `.htaccess`), NO en `uploads/`.
+
+## Notas del autorregistro de empleados
+
+- RRHH da de alta al empleado (al menos nombre, número y teléfono y/o correo). Luego le comparte la
+  liga general (Empleados → "Liga de registro": activar, copiar, WhatsApp, generar nueva = invalida la anterior).
+- Identificación: número de empleado + teléfono (últimos 10 dígitos) o correo de su ficha, ambos del
+  mismo registro. Si la ficha tiene correo, se envía código de 6 dígitos (15 min, 5 intentos, máx. 3 envíos;
+  el correo NO lleva enlaces). Solo cuentas sin contraseña ni PIN de portal.
+- Queda `registro_estado='pendiente'` (no puede entrar al portal) hasta que RRHH aprueba la selfie en la
+  ficha; rechazar borra selfie y credenciales y permite reintentar.
+- Límite de intentos del portal en BD (`intentos_acceso`): login 20/IP y 5/cuenta en 15 min; registro 10/IP.
+- Acceso público al portal: liga "Acceso empleados" en el pie del sitio (`index.php`, `vacantes.php`).

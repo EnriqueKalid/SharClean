@@ -416,6 +416,7 @@ if ($filterId > 0) {
       <div class="footer__bottom-links">
         <a href="#" class="footer__bottom-link" id="open-privacy">Aviso de privacidad</a>
         <a href="#" class="footer__bottom-link" id="open-terms">Términos de servicio</a>
+        <a href="portal/login.php" class="footer__bottom-link">Acceso empleados</a>
       </div>
     </div>
   </div>

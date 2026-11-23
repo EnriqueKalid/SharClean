@@ -35,23 +35,28 @@
   }
   window.compressImage = compressImage;
 
+  // Con data-autosubmit, el formulario se envía solo cuando terminó de comprimir
   document.addEventListener('change', async function (e) {
     const input = e.target;
     if (!(input instanceof HTMLInputElement) || !input.matches('input[type=file][data-compress]')) return;
-    const file = input.files && input.files[0];
-    if (!file || typeof DataTransfer === 'undefined') return;
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
 
     const submits = input.form ? input.form.querySelectorAll('[type=submit]') : [];
     submits.forEach(b => b.disabled = true);
     try {
-      const out = await compressImage(file, parseInt(input.dataset.compress, 10) || 1024);
-      if (out !== file) {
-        const dt = new DataTransfer();
-        dt.items.add(out);
-        input.files = dt.files;
+      if (typeof DataTransfer !== 'undefined') {
+        const max = parseInt(input.dataset.compress, 10) || 1024;
+        const out = await Promise.all(files.map(f => compressImage(f, max)));
+        if (out.some((f, i) => f !== files[i])) {
+          const dt = new DataTransfer();
+          out.forEach(f => dt.items.add(f));
+          input.files = dt.files;
+        }
       }
     } finally {
       submits.forEach(b => b.disabled = false);
     }
+    if (input.dataset.autosubmit !== undefined && input.form) input.form.requestSubmit();
   });
 })();

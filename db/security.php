@@ -35,7 +35,10 @@ function startSecureSession(): void
  * páginas usan <script>/<style> y onclick inline; aun así la política bloquea
  * scripts, formularios y conexiones hacia dominios externos.
  */
-function sendSecurityHeaders(): void
+/**
+ * @param bool $geo true en el portal del empleado (el check-in registra la ubicación)
+ */
+function sendSecurityHeaders(bool $geo = false): void
 {
     if (headers_sent()) return;
     header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; "
@@ -44,8 +47,42 @@ function sendSecurityHeaders(): void
     header('X-Frame-Options: DENY');
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: same-origin');
-    header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()');
+    // Cámara (y GPS en el portal) solo para el propio sitio; nunca para iframes externos
+    header('Permissions-Policy: camera=(self), microphone=(), geolocation=' . ($geo ? '(self)' : '()') . ', payment=()');
     header('Cache-Control: no-store, private');   // al cerrar sesión, "Atrás" no muestra datos
+}
+
+/* ── Límite de intentos (tabla intentos_acceso) ────────────────────────────
+   Persistente en BD: no se evade borrando la cookie como el contador en sesión.
+   Si la tabla aún no existe (migración pendiente) no limita, para no bloquear a nadie. */
+
+function clientIp(): string
+{
+    return substr((string)($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45);
+}
+
+/** true si $clave ya acumuló $max intentos fallidos en los últimos $minutos. */
+function intentosExcedidos(mysqli $db, string $clave, int $max, int $minutos = 15): bool
+{
+    $c   = $db->real_escape_string(substr($clave, 0, 80));
+    $res = $db->query("SELECT COUNT(*) FROM intentos_acceso
+                       WHERE clave='$c' AND created_at > NOW() - INTERVAL $minutos MINUTE");
+    return $res && (int)$res->fetch_row()[0] >= $max;
+}
+
+function registrarIntento(mysqli $db, string ...$claves): void
+{
+    foreach ($claves as $clave) {
+        $c = $db->real_escape_string(substr($clave, 0, 80));
+        $db->query("INSERT INTO intentos_acceso (clave) VALUES ('$c')");
+    }
+    if (random_int(1, 50) === 1) $db->query('DELETE FROM intentos_acceso WHERE created_at < NOW() - INTERVAL 1 DAY');
+}
+
+function limpiarIntentos(mysqli $db, string $clave): void
+{
+    $c = $db->real_escape_string(substr($clave, 0, 80));
+    $db->query("DELETE FROM intentos_acceso WHERE clave='$c'");
 }
 
 /**

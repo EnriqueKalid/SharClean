@@ -31,13 +31,11 @@ $tieneFotoRef = !empty($emp['foto_referencia']);
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Check-in – Sharclean</title>
-<link rel="icon" href="../images/favicon.ico" type="image/x-icon">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<title>Check-in – <?= h(portalMarca()['empresa']) ?></title>
+<?php require __DIR__ . '/_head.php'; ?>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',system-ui,sans-serif;background:#f0f9ff;min-height:100vh;color:#1e293b}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f0f9ff;min-height:100vh;color:#1e293b}
 .header{background:#0284C7;color:#fff;padding:16px 24px;display:flex;align-items:center;gap:16px;justify-content:space-between}
 .header-left{display:flex;align-items:center;gap:16px}
 .header img{height:36px}
@@ -73,7 +71,7 @@ video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14
 
 <div class="header">
   <div class="header-left">
-    <img src="../images/logo.png" alt="Sharclean">
+    <img src="<?= h(portalMarca()['logo']) ?>" alt="" onerror="this.remove()">
     <div>
       <h1>Check-in</h1>
       <p><?= h($emp['nombre'] . ' ' . $emp['apellido_paterno']) ?> · <?= h($emp['numero_empleado']) ?></p>
