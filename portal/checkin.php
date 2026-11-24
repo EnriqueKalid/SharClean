@@ -65,7 +65,7 @@ video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14
 .cam-stage{position:relative;margin-bottom:14px;border-radius:12px;overflow:hidden}
 .cam-stage video{margin-bottom:0;display:block;transform:scaleX(-1)}
 .cam-oval{position:absolute;left:50%;top:48%;width:56%;aspect-ratio:3/4;max-height:86%;transform:translate(-50%,-50%);border:3px dashed rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 0 999px rgba(15,23,42,.35);pointer-events:none;transition:border-color .2s}
-.cam-oval.ok{border-style:solid;border-color:#4ade80}
+.cam-oval.rostro-ok{border-style:solid;border-color:#4ade80}
 .cam-hint{position:absolute;left:0;right:0;bottom:10px;text-align:center;color:#fff;font-size:14px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,.7);padding:0 12px}
 .success-icon{font-size:56px;text-align:center;margin-bottom:10px}
 .success-title{font-size:19px;font-weight:800;text-align:center;color:#16a34a;margin-bottom:6px}
@@ -253,7 +253,7 @@ video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14
   /* Guía en vivo: "Capturar" solo se activa con un rostro dentro del óvalo (óvalo verde).
      Si el detector no carga en 10 s, se avisa y se permite capturar (la verificación decide después). */
   async function startLiveGuide() {
-    camOval.classList.remove('ok');
+    camOval.classList.remove('rostro-ok');
     btnCapture.disabled = true;
     camHint.textContent = 'Preparando la cámara…';
     const listo = await conTiempo(detectorPromise, 10000);
@@ -271,7 +271,7 @@ video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14
       try {
         const d = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 }));
         const ok = !!d && d.box.width >= video.videoWidth * 0.2;
-        camOval.classList.toggle('ok', ok);
+        camOval.classList.toggle('rostro-ok', ok);
         btnCapture.disabled = !ok;
         camHint.textContent = ok ? '¡Bien! Toca Capturar selfie'
           : (d ? 'Acércate un poco más' : 'Acomoda tu rostro dentro del óvalo, con buena luz');

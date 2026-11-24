@@ -109,9 +109,19 @@ label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6
 .tabs a{flex:1;text-align:center;padding:10px;border-radius:9px;font-size:13px;font-weight:700;color:#64748b;text-decoration:none}
 .tabs a.active{background:#fff;color:var(--brand);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .tip{font-size:13px;color:#64748b;margin-top:18px;text-align:center;line-height:1.6}
-.install{margin-top:16px}
-.install[hidden],#ios-tip[hidden]{display:none}
-#ios-tip{margin-top:14px;font-size:13px;color:#475569;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:12px;text-align:center;line-height:1.5}
+[hidden]{display:none !important}
+.inst{margin-top:18px}
+.inst-title{font-size:17px;font-weight:800;color:#0f172a;margin-bottom:4px}
+.inst-sub{font-size:14px;color:#64748b;margin-bottom:16px;line-height:1.5}
+.inst #btn-install{margin-bottom:16px}
+.inst-tabs{display:flex;gap:6px;background:#f1f5f9;border-radius:12px;padding:4px;margin-bottom:14px}
+.inst-tabs button{flex:1;padding:10px;border:none;border-radius:9px;background:none;font:inherit;font-size:14px;font-weight:700;color:#64748b;cursor:pointer}
+.inst-tabs button[aria-selected=true]{background:#fff;color:var(--brand);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.inst-steps{list-style:none;counter-reset:paso;display:flex;flex-direction:column;gap:10px}
+.inst-steps li{counter-increment:paso;display:flex;gap:12px;align-items:flex-start;font-size:15px;line-height:1.45;color:#1e293b}
+.inst-steps li::before{content:counter(paso);flex:0 0 26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font-size:13px;font-weight:800;display:grid;place-items:center}
+.ico-share{display:inline-block;padding:0 6px;border:1.5px solid #94a3b8;border-radius:6px;font-size:12px;line-height:18px;color:#475569}
+.inst-fin{margin-top:16px;padding-top:14px;border-top:1px solid #f1f5f9;font-size:14px;color:#475569;line-height:1.5}
 </style>
 </head>
 <body>
@@ -165,30 +175,67 @@ label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6
       <button type="submit" class="btn btn-primary">Entrar</button>
     </form>
 
-    <div class="install" id="install" hidden>
-      <button type="button" class="btn btn-ghost" id="btn-install">📲 Instalar en mi celular</button>
-    </div>
-    <p id="ios-tip" hidden>Para tenerlo como app en tu iPhone: toca <strong>Compartir</strong> y luego <strong>“Agregar a inicio”</strong>.</p>
-
     <p class="tip">¿Primera vez? Usa la liga de registro que te envió Recursos Humanos.<br>¿Olvidaste tu contraseña? Pide a tu supervisor que la restablezca.</p>
+  </div>
+
+  <!-- Instalar el Check-in como app (se oculta si ya se abrió desde el ícono instalado) -->
+  <div class="card inst" id="inst">
+    <div class="inst-title">📲 Instala el Check-in en tu celular</div>
+    <p class="inst-sub">Hazlo una sola vez y entra siempre desde el ícono, como cualquier app.</p>
+
+    <button type="button" class="btn btn-primary" id="btn-install" hidden>Instalar ahora</button>
+
+    <div class="inst-tabs" role="tablist">
+      <button type="button" role="tab" data-os="android" aria-selected="true">Android</button>
+      <button type="button" role="tab" data-os="ios" aria-selected="false">iPhone</button>
+    </div>
+
+    <ol class="inst-steps" data-os="android">
+      <li>Abre esta página en <strong>Chrome</strong>.</li>
+      <li>Toca el menú <strong>⋮</strong> (arriba a la derecha).</li>
+      <li>Toca <strong>Agregar a pantalla principal</strong> o <strong>Instalar app</strong>.</li>
+      <li>Confirma con <strong>Instalar</strong>.</li>
+    </ol>
+    <ol class="inst-steps" data-os="ios" hidden>
+      <li>Abre esta página en <strong>Safari</strong>.</li>
+      <li>Toca <strong>Compartir</strong> <span class="ico-share" aria-hidden="true">⬆︎</span> (abajo, al centro).</li>
+      <li>Desliza y toca <strong>Agregar a inicio</strong>.</li>
+      <li>Toca <strong>Agregar</strong> (arriba a la derecha).</li>
+    </ol>
+
+    <p class="inst-fin">Listo: busca el ícono <strong>Check-in</strong> en tu pantalla y entra desde ahí. La primera vez que cheques, permite la <strong>cámara</strong> y la <strong>ubicación</strong>.</p>
   </div>
 </div>
 
 <script>
-/* Instalar como app: Android/Chrome muestra el botón; iPhone, las instrucciones */
+/* Instalar como app: pasos por plataforma (se abre la del celular en uso) y, si Chrome lo
+   permite, botón "Instalar ahora" de un toque. Ya instalada (abierta desde el ícono) no se muestra. */
 (function () {
-  const box = document.getElementById('install');
+  const card = document.getElementById('inst');
+  const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+  if (standalone) { card.hidden = true; return; }
+
+  function mostrar(os) {
+    card.querySelectorAll('.inst-tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.os === os)));
+    card.querySelectorAll('.inst-steps').forEach(l => { l.hidden = l.dataset.os !== os; });
+  }
+  card.querySelectorAll('.inst-tabs button').forEach(b => b.addEventListener('click', () => mostrar(b.dataset.os)));
+  const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+             || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);   // iPad con iPadOS
+  mostrar(esIOS ? 'ios' : 'android');
+
+  const btn = document.getElementById('btn-install');
   let aviso = null;
-  addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); aviso = e; box.hidden = false; });
-  document.getElementById('btn-install').addEventListener('click', async function () {
+  addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); aviso = e; btn.hidden = false; });
+  btn.addEventListener('click', async function () {
     if (!aviso) return;
     aviso.prompt();
-    await aviso.userChoice;
+    const r = await aviso.userChoice;
     aviso = null;
-    box.hidden = true;
+    btn.hidden = true;
+    if (r && r.outcome === 'accepted') card.hidden = true;
   });
-  const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
-  if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone) document.getElementById('ios-tip').hidden = false;
+  addEventListener('appinstalled', () => { card.hidden = true; });
 })();
 </script>
 </body>

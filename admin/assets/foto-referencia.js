@@ -38,7 +38,9 @@
   let facing = root.dataset.facing || 'environment';   // data-facing="user" para selfie (autorregistro)
   let detectorReady = null, recognitionReady = null;
 
-  const SIN_VERIFICACION = 'No se pudo cargar la verificación facial. Revise la conexión a internet e intente de nuevo; si continúa, avise al administrador del sistema.';
+  /* Mensaje con el detalle técnico al final, para poder diagnosticar desde una captura de pantalla */
+  const sinVerificacion = e => 'No se pudo cargar la verificación facial. Recargue la página e intente de nuevo; si continúa, avise al administrador del sistema.'
+    + ' [Detalle: ' + ((e && (e.message || e.name)) || 'desconocido').toString().slice(0, 140) + ']';
 
   function setStatus(text, kind) {
     status.textContent = text;
@@ -122,7 +124,7 @@
     try {
       await conTiempo(loadRecognition(), LOAD_WAIT);
     } catch (e) {
-      onError(SIN_VERIFICACION);
+      onError(sinVerificacion(e));
       return false;
     }
     const motivo = await revisarRostro(canvas);
@@ -153,12 +155,12 @@
   async function guiaEnVivo() {
     clearInterval(liveTimer); liveTimer = null;
     btnCap.disabled = true;
-    oval && oval.classList.remove('ok');
+    oval && oval.classList.remove('rostro-ok');
     msg.textContent = 'Preparando verificación facial…';
     try {
       await conTiempo(loadDetector(), LOAD_WAIT);
     } catch (e) {
-      msg.textContent = SIN_VERIFICACION;
+      msg.textContent = sinVerificacion(e);
       return;
     }
     if (!stream) return;                          // se cerró la cámara mientras cargaba
@@ -171,7 +173,7 @@
         const fa = window.faceapi;
         const dets = await fa.detectAllFaces(video, new fa.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }));
         const problema = problemaEncuadre(dets, video.videoWidth, video.videoHeight);
-        oval && oval.classList.toggle('ok', !problema);
+        oval && oval.classList.toggle('rostro-ok', !problema);
         btnCap.disabled = !!problema;
         msg.textContent = problema || '¡Bien! Presione Capturar.';
       } catch (e) {
