@@ -1,13 +1,20 @@
 <?php
 /**
  * Sharclean Portal – Registrar check-in / check-out del empleado
- * Recibe: lat, lng, foto (data URL base64), face_score (0-100 o vacío)
- * Responde JSON.
+ * Recibe: lat, lng, foto (archivo JPEG; o data URL base64 de versiones anteriores), face_score (0-100 o vacío)
+ * Responde SIEMPRE JSON (también si la sesión venció o falla la BD), para que la pantalla
+ * muestre el motivo real en vez de "No se pudo conectar con el servidor".
  */
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 
+require_once __DIR__ . '/_boot.php';
+if (empty($_SESSION['portal_empleado_id'])) {      // auth.php redirigiría al login (HTML)
+    http_response_code(401);
+    echo json_encode(['type' => 'error', 'code' => 'sesion', 'msg' => 'Tu sesión se cerró. Vuelve a entrar para registrar tu asistencia.']);
+    exit;
+}
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../db/csrf.php';
 require_once __DIR__ . '/../db/asistencia_calc.php';
@@ -29,14 +36,22 @@ if ($lat === null || $lng === null || $lat < -90 || $lat > 90 || $lng < -180 || 
     exit;
 }
 
-/* ── Selfie (data URL base64) ──────────────────────────────── */
-$fotoData = $_POST['foto'] ?? '';
-if (!preg_match('#^data:image/(jpe?g|png);base64,#i', $fotoData)) {
-    echo json_encode(['type' => 'error', 'msg' => 'No se recibió una foto válida. Intenta de nuevo.']);
+/* ── Selfie: archivo (actual) o data URL base64 (pantalla en caché de la versión anterior) ── */
+$binary = false;
+if (isset($_FILES['foto']) && is_array($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK
+    && is_uploaded_file($_FILES['foto']['tmp_name'])) {
+    $binary = file_get_contents($_FILES['foto']['tmp_name']);
+} else {
+    $fotoData = (string)($_POST['foto'] ?? '');
+    if (preg_match('#^data:image/(jpe?g|png);base64,#i', $fotoData)) {
+        $binary = base64_decode(substr($fotoData, strpos($fotoData, ',') + 1), true);
+    }
+}
+if ($binary === false || $binary === '') {
+    echo json_encode(['type' => 'error', 'msg' => 'No se recibió la foto. Tómala de nuevo.']);
     exit;
 }
-$binary = base64_decode(substr($fotoData, strpos($fotoData, ',') + 1), true);
-if ($binary === false || strlen($binary) < 500 || strlen($binary) > 5 * 1024 * 1024) {
+if (strlen($binary) < 500 || strlen($binary) > 5 * 1024 * 1024) {
     echo json_encode(['type' => 'error', 'msg' => 'La foto no es válida o es demasiado grande.']);
     exit;
 }
@@ -60,6 +75,14 @@ if (!file_put_contents($uploadDir . $filename, $binary)) {
 $faceScoreRaw   = $_POST['face_score'] ?? '';
 $faceScore      = ($faceScoreRaw !== '' && is_numeric($faceScoreRaw)) ? max(0.0, min(100.0, (float)$faceScoreRaw)) : null;
 $revisionFlag   = ($faceScore === null || $faceScore < 50) ? 1 : 0;
+
+/* Error de BD (mysqli lanza excepciones en PHP 8.1+): se responde JSON y se borra la foto huérfana */
+set_exception_handler(function (Throwable $t) use ($uploadDir, $filename) {
+    error_log('[Sharclean checkin] ' . get_class($t) . ': ' . $t->getMessage() . ' en ' . $t->getFile() . ':' . $t->getLine());
+    if (is_file($uploadDir . $filename)) unlink($uploadDir . $filename);
+    http_response_code(500);
+    echo json_encode(['type' => 'error', 'msg' => 'No se pudo guardar tu registro por un problema del sistema. Intenta de nuevo en un momento; si continúa, avisa a Recursos Humanos.']);
+});
 
 /* ── Determinar si es entrada o salida ─────────────────────── */
 $db    = getPortalDB();
@@ -96,7 +119,7 @@ if (!$row || !$row['hora_entrada']) {
         );
         $s->bind_param('issiiddsdi', $empId, $today, $horaAhora, $retardoI, $minRetardo, $lat, $lng, $filename, $faceScore, $revisionFlag);
     }
-    $s->execute();
+    if (!$s->execute()) throw new RuntimeException('INSERT/UPDATE entrada: ' . $s->error);
     $db->close();
     echo json_encode(['type' => 'success', 'msg' => '¡Entrada registrada a las ' . substr($horaAhora, 0, 5) . '!', 'accion' => 'entrada']);
     exit;
@@ -115,7 +138,7 @@ $s = $db->prepare(
      WHERE id=?"
 );
 $s->bind_param('sddddsdii', $horaAhora, $horasTrabajadas, $horasExtra, $lat, $lng, $filename, $faceScore, $revisionFlag, $row['id']);
-$s->execute();
+if (!$s->execute()) throw new RuntimeException('UPDATE salida: ' . $s->error);
 $db->close();
 
 echo json_encode(['type' => 'success', 'msg' => '¡Salida registrada a las ' . substr($horaAhora, 0, 5) . '! Horas trabajadas: ' . number_format((float)$horasTrabajadas, 1) . 'h', 'accion' => 'salida']);

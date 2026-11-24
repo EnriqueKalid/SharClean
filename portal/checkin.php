@@ -62,6 +62,11 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background
 .ok{background:#dcfce7;color:#166534;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;font-weight:600}
 .tip{font-size:12px;color:#94a3b8;margin-top:12px;text-align:center;line-height:1.6}
 video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14px;max-height:360px;object-fit:cover}
+.cam-stage{position:relative;margin-bottom:14px;border-radius:12px;overflow:hidden}
+.cam-stage video{margin-bottom:0;display:block;transform:scaleX(-1)}
+.cam-oval{position:absolute;left:50%;top:48%;width:56%;aspect-ratio:3/4;max-height:86%;transform:translate(-50%,-50%);border:3px dashed rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 0 999px rgba(15,23,42,.35);pointer-events:none;transition:border-color .2s}
+.cam-oval.ok{border-style:solid;border-color:#4ade80}
+.cam-hint{position:absolute;left:0;right:0;bottom:10px;text-align:center;color:#fff;font-size:14px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,.7);padding:0 12px}
 .success-icon{font-size:56px;text-align:center;margin-bottom:10px}
 .success-title{font-size:19px;font-weight:800;text-align:center;color:#16a34a;margin-bottom:6px}
 .success-sub{font-size:14px;color:#64748b;text-align:center;line-height:1.6}
@@ -128,7 +133,11 @@ video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14
     </div>
 
     <div id="step-camera" hidden>
-      <video id="video" autoplay playsinline muted></video>
+      <div class="cam-stage">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="cam-oval" id="camOval"></div>
+        <div class="cam-hint" id="camHint" aria-live="polite">Acomoda tu rostro dentro del óvalo</div>
+      </div>
       <button id="btnCapture" class="btn btn-primary">📸 Capturar selfie</button>
     </div>
 
@@ -156,77 +165,56 @@ video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14
   const ACCION       = <?= json_encode($estado === 'con_entrada' ? 'salida' : 'entrada') ?>;
   const CSRF_TOKEN   = <?= json_encode($token) ?>;
   const TIENE_REF    = <?= json_encode($tieneFotoRef) ?>;
-  const MATCH_DIST   = 0.6;
+  const MATCH_DIST   = 0.6;     // distancia máxima entre rostros para darlo por verificado
   const MAX_RETRIES  = 3;
+  const MAX_PX       = 720;     // lado mayor de la selfie que se envía (~80 KB)
+  const MODEL_WAIT   = 8000;    // ms máximos esperando el reconocimiento facial al capturar
 
-  const elIdle    = document.getElementById('step-idle');
-  const elCamera  = document.getElementById('step-camera');
-  const elReview  = document.getElementById('step-review');
-  const elResult  = document.getElementById('step-result');
-  const btnStart  = document.getElementById('btnStart');
-  const btnCapture= document.getElementById('btnCapture');
-  const btnSubmit = document.getElementById('btnSubmit');
-  const btnRetry  = document.getElementById('btnRetry');
-  const idleStatus= document.getElementById('idleStatus');
-  const faceStatus= document.getElementById('faceStatus');
-  const video     = document.getElementById('video');
-  const canvas    = document.getElementById('canvas');
-  const preview   = document.getElementById('preview');
-  const refPhoto  = document.getElementById('refPhoto');
+  const $ = id => document.getElementById(id);
+  const elIdle = $('step-idle'), elCamera = $('step-camera'), elReview = $('step-review'), elResult = $('step-result');
+  const btnStart = $('btnStart'), btnCapture = $('btnCapture'), btnSubmit = $('btnSubmit'), btnRetry = $('btnRetry');
+  const idleStatus = $('idleStatus'), faceStatus = $('faceStatus');
+  const video = $('video'), canvas = $('canvas'), preview = $('preview'), refPhoto = $('refPhoto');
+  const camOval = $('camOval'), camHint = $('camHint');
 
   if (!btnStart) return; // jornada ya completa, no hay acciones
 
-  let stream       = null;
-  let lat = null, lng = null;
-  let lastDataUrl   = null;
-  let lastFaceScore = null; // null = sin validar
-  let retries       = 0;
-  let refDescriptor = null;
-  let modelsReady   = false;
+  let stream = null, lat = null, lng = null;
+  let lastBlob = null, lastFaceScore = null, retries = 0;
+  let refDescriptor = null, liveTimer = null;
 
-  /* ── Cargar face-api.js en segundo plano (no bloquea el flujo) ── */
-  if (TIENE_REF && window.faceapi) {
-    Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri('assets/face-api/weights'),
-      faceapi.nets.faceLandmark68Net.loadFromUri('assets/face-api/weights'),
-      faceapi.nets.faceRecognitionNet.loadFromUri('assets/face-api/weights'),
-    ]).then(async () => {
-      modelsReady = true;
-      if (refPhoto.complete && refPhoto.naturalWidth > 0) await computeRefDescriptor();
-    }).catch(() => { modelsReady = false; });
+  const detOpts = () => new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 });
 
-    refPhoto.addEventListener('load', async () => {
-      if (modelsReady) await computeRefDescriptor();
-    });
-  }
+  /* ── Reconocimiento facial: se carga en segundo plano; al capturar se espera (máx. 8 s) ── */
+  const facePromise = (TIENE_REF && window.faceapi)
+    ? Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri('assets/face-api/weights'),
+        faceapi.nets.faceLandmark68Net.loadFromUri('assets/face-api/weights'),
+        faceapi.nets.faceRecognitionNet.loadFromUri('assets/face-api/weights'),
+        refPhoto.complete && refPhoto.naturalWidth ? Promise.resolve()
+          : new Promise((ok, fail) => { refPhoto.addEventListener('load', ok, { once: true }); refPhoto.addEventListener('error', fail, { once: true }); }),
+      ]).then(async () => {
+        const det = await faceapi.detectSingleFace(refPhoto, detOpts()).withFaceLandmarks().withFaceDescriptor();
+        refDescriptor = det ? det.descriptor : null;
+        return refDescriptor ? true : 'sinref';      // 'sinref' = su foto de registro no tiene un rostro reconocible
+      }).catch(() => false)
+    : Promise.resolve(false);
 
-  async function computeRefDescriptor() {
-    try {
-      const det = await faceapi.detectSingleFace(refPhoto, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks().withFaceDescriptor();
-      if (det) refDescriptor = det.descriptor;
-    } catch (e) { refDescriptor = null; }
-  }
+  const conTiempo = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(false), ms))]);
 
   /* ── Paso 1: ubicación + cámara ── */
-  btnStart.addEventListener('click', async () => {
+  btnStart.addEventListener('click', () => {
     btnStart.disabled = true;
     idleStatus.textContent = 'Obteniendo tu ubicación…';
-
     if (!navigator.geolocation) {
-      idleStatus.textContent = 'Tu navegador no soporta geolocalización.';
+      idleStatus.textContent = 'Tu navegador no permite obtener la ubicación. Prueba con Chrome o Safari actualizados.';
       btnStart.disabled = false;
       return;
     }
-
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-        await startCamera();
-      },
+      async pos => { lat = pos.coords.latitude; lng = pos.coords.longitude; await startCamera(); },
       () => {
-        idleStatus.textContent = 'Necesitamos tu ubicación para marcar el check-in. Activa el permiso de ubicación e intenta de nuevo.';
+        idleStatus.textContent = 'Necesitamos tu ubicación para registrar tu asistencia. Activa el permiso de ubicación e intenta de nuevo.';
         btnStart.disabled = false;
       },
       { enableHighAccuracy: true, timeout: 12000 }
@@ -235,65 +223,92 @@ video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14
 
   async function startCamera() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      idleStatus.textContent = 'Tu navegador no soporta acceso a la cámara, o la página no se abrió con HTTPS.';
+      idleStatus.textContent = 'Tu navegador no permite usar la cámara aquí. Abre el portal con https:// en Chrome o Safari.';
       btnStart.disabled = false;
+      elIdle.hidden = false;
       return;
     }
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } }, audio: false });
       video.srcObject = stream;
-      elIdle.hidden = true;
-      elCamera.hidden = false;
+      elIdle.hidden = true; elReview.hidden = true; elCamera.hidden = false;
+      startLiveGuide();
     } catch (e) {
-      idleStatus.textContent = 'No se pudo acceder a la cámara. Revisa los permisos e intenta de nuevo.';
+      idleStatus.textContent = 'No se pudo abrir la cámara. Revisa que el permiso de cámara esté activado e intenta de nuevo.';
       btnStart.disabled = false;
+      elIdle.hidden = false;
     }
   }
 
   function stopCamera() {
+    clearInterval(liveTimer); liveTimer = null;
     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
   }
 
-  /* ── Paso 2: capturar selfie ── */
+  /* Guía en vivo: el óvalo se pone verde cuando se ve un rostro (solo orienta; no bloquea la captura) */
+  function startLiveGuide() {
+    camOval.classList.remove('ok');
+    camHint.textContent = 'Acomoda tu rostro dentro del óvalo';
+    if (!TIENE_REF || !window.faceapi) return;
+    let ocupado = false;
+    liveTimer = setInterval(async () => {
+      if (ocupado || !faceapi.nets.tinyFaceDetector.isLoaded || video.readyState < 2) return;
+      ocupado = true;
+      try {
+        const d = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 }));
+        const ok = !!d && d.box.width >= video.videoWidth * 0.2;
+        camOval.classList.toggle('ok', ok);
+        camHint.textContent = ok ? '¡Bien! Toca Capturar selfie'
+          : (d ? 'Acércate un poco más' : 'Acomoda tu rostro dentro del óvalo, con buena luz');
+      } catch (e) { /* la guía es opcional */ }
+      ocupado = false;
+    }, 500);
+  }
+
+  /* ── Paso 2: capturar selfie (reducida a 720 px) ── */
   btnCapture.addEventListener('click', async () => {
-    const w = video.videoWidth || 480, h = video.videoHeight || 480;
-    canvas.width = w; canvas.height = h;
-    canvas.getContext('2d').drawImage(video, 0, 0, w, h);
-    lastDataUrl = canvas.toDataURL('image/jpeg', 0.82);
-    preview.src = lastDataUrl;
+    const vw = video.videoWidth || 480, vh = video.videoHeight || 640;
+    const k = Math.min(1, MAX_PX / Math.max(vw, vh));
+    canvas.width = Math.round(vw * k); canvas.height = Math.round(vh * k);
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    lastBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.85));
+    preview.src = URL.createObjectURL(lastBlob);
 
     stopCamera();
-    elCamera.hidden = true;
-    elReview.hidden = false;
-    btnSubmit.disabled = true;
-    faceStatus.innerHTML = '';
+    elCamera.hidden = true; elReview.hidden = false;
+    btnSubmit.disabled = true; btnRetry.disabled = false;
+    lastFaceScore = null;
 
-    if (TIENE_REF && modelsReady && refDescriptor) {
+    if (TIENE_REF && window.faceapi) {
       faceStatus.innerHTML = '<p class="tip">Verificando que eres tú…</p>';
-      try {
-        const det = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions())
-          .withFaceLandmarks().withFaceDescriptor();
-        if (!det) {
-          lastFaceScore = null;
-          faceStatus.innerHTML = '<div class="warn">No detectamos tu rostro con claridad. Puedes repetir la foto o continuar (quedará marcada para revisión).</div>';
-        } else {
-          const dist = faceapi.euclideanDistance(refDescriptor, det.descriptor);
-          lastFaceScore = Math.round(Math.max(0, 1 - dist) * 100);
-          if (dist <= MATCH_DIST) {
-            faceStatus.innerHTML = '<div class="ok">✅ Rostro verificado.</div>';
-          } else if (retries < MAX_RETRIES) {
-            retries++;
-            faceStatus.innerHTML = `<div class="warn">No pudimos confirmar que eres tú (intento ${retries}/${MAX_RETRIES}). Repite la foto con buena luz, de frente.</div>`;
+      const listo = await conTiempo(facePromise, MODEL_WAIT);
+      if (listo === 'sinref') {
+        faceStatus.innerHTML = '<p class="tip">Tu foto de registro no permite la verificación automática; pide a Recursos Humanos que la actualice. Puedes enviar tu registro, ellos lo confirmarán.</p>';
+      } else if (!listo) {
+        faceStatus.innerHTML = '<p class="tip">Este celular no pudo hacer la verificación automática. Puedes enviar tu registro; Recursos Humanos lo confirmará.</p>';
+      } else {
+        try {
+          const det = await faceapi.detectSingleFace(canvas, detOpts()).withFaceLandmarks().withFaceDescriptor();
+          if (!det) {
+            faceStatus.innerHTML = '<div class="warn">No alcanzamos a ver tu rostro. Acércate, mira de frente a la cámara y busca un lugar con más luz. Puedes repetir la foto o enviarla así.</div>';
           } else {
-            faceStatus.innerHTML = '<div class="warn">No pudimos confirmar tu identidad tras varios intentos. Puedes continuar: tu check-in quedará marcado para revisión del administrador.</div>';
+            const dist = faceapi.euclideanDistance(refDescriptor, det.descriptor);
+            lastFaceScore = Math.round(Math.max(0, 1 - dist) * 100);
+            if (dist <= MATCH_DIST) {
+              faceStatus.innerHTML = '<div class="ok">✅ ¡Listo, eres tú!</div>';
+            } else if (retries < MAX_RETRIES) {
+              retries++;
+              faceStatus.innerHTML = `<div class="warn">La foto no se parece lo suficiente a tu foto de registro. Repítela de frente, sin lentes oscuros ni gorra (intento ${retries} de ${MAX_RETRIES}).</div>`;
+            } else {
+              faceStatus.innerHTML = '<div class="warn">Puedes enviar tu registro así; Recursos Humanos lo confirmará.</div>';
+            }
           }
+        } catch (e) {
+          faceStatus.innerHTML = '<p class="tip">No se pudo hacer la verificación automática. Puedes enviar tu registro; Recursos Humanos lo confirmará.</p>';
         }
-      } catch (e) {
-        lastFaceScore = null;
-        faceStatus.innerHTML = '<div class="tip">No se pudo verificar el rostro en este dispositivo. Tu check-in quedará marcado para revisión.</div>';
       }
     } else {
-      lastFaceScore = null;
+      faceStatus.innerHTML = '';
     }
     btnSubmit.disabled = false;
   });
@@ -301,45 +316,72 @@ video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14
   /* ── Repetir foto ── */
   btnRetry.addEventListener('click', async () => {
     elReview.hidden = true;
-    elIdle.hidden = false;
-    btnStart.disabled = false;
-    idleStatus.textContent = '';
+    faceStatus.innerHTML = '';
     await startCamera();
-    elIdle.hidden = true;
   });
 
-  /* ── Confirmar: enviar al servidor ── */
-  btnSubmit.addEventListener('click', async () => {
-    btnSubmit.disabled = true;
-    btnRetry.disabled  = true;
-    faceStatus.innerHTML += '<p class="tip">Enviando…</p>';
+  /* ── Enviar al servidor (los mismos datos si hay que reintentar) ── */
+  function mostrarError(html, conReintento) {
+    elReview.hidden = true; elResult.hidden = false;
+    elResult.innerHTML = '<div class="error">' + html + '</div>'
+      + (conReintento ? '<button class="btn btn-primary" id="btnReenviar">Intentar de nuevo</button>' : '')
+      + '<button class="btn btn-outline" onclick="location.reload()">Empezar de nuevo</button>';
+    const b = $('btnReenviar');
+    if (b) b.addEventListener('click', enviar);
+  }
+
+  async function enviar() {
+    btnSubmit.disabled = true; btnRetry.disabled = true;
+    elResult.hidden = true; elReview.hidden = false;
+    faceStatus.insertAdjacentHTML('beforeend', '<p class="tip" id="enviando">Enviando…</p>');
+    const quitarEnviando = () => { const el = $('enviando'); if (el) el.remove(); };
 
     const fd = new FormData();
     fd.append('csrf_token', CSRF_TOKEN);
     fd.append('lat', String(lat));
     fd.append('lng', String(lng));
-    fd.append('foto', lastDataUrl);
+    fd.append('foto', lastBlob, 'selfie.jpg');
     fd.append('face_score', lastFaceScore === null ? '' : String(lastFaceScore));
 
+    let res;
     try {
-      const res  = await fetch('checkin_submit.php', { method: 'POST', body: fd });
-      const data = await res.json();
-      elReview.hidden = true;
-      elResult.hidden = false;
-      if (data.type === 'success') {
-        elResult.innerHTML = `<div class="success-icon">✅</div><div class="success-title">${data.msg}</div>`;
-        setTimeout(() => location.reload(), 1800);
-      } else {
-        elResult.innerHTML = `<div class="error">${data.msg || 'Ocurrió un error, intenta de nuevo.'}</div>
-          <button class="btn btn-outline" onclick="location.reload()">Reintentar</button>`;
-      }
+      res = await fetch('checkin_submit.php', { method: 'POST', body: fd, credentials: 'same-origin' });
     } catch (e) {
-      elReview.hidden = true;
-      elResult.hidden = false;
-      elResult.innerHTML = '<div class="error">No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.</div>' +
-        '<button class="btn btn-outline" onclick="location.reload()">Reintentar</button>';
+      quitarEnviando();
+      mostrarError(navigator.onLine === false
+        ? 'Tu celular no tiene internet en este momento. Conéctate y vuelve a intentar.'
+        : 'No se pudo conectar con el servidor. Revisa tu señal o Wi-Fi y vuelve a intentar.', true);
+      return;
     }
-  });
+    quitarEnviando();
+
+    if (res.redirected && /login\.php/.test(res.url)) {
+      mostrarError('Tu sesión se cerró. <a href="login.php">Vuelve a entrar</a> para registrar tu asistencia.', false);
+      return;
+    }
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* no es JSON: error del servidor o del hosting */ }
+
+    if (!data) {
+      mostrarError('El sistema tuvo un problema al guardar tu registro (código ' + res.status + '). Intenta de nuevo; si continúa, avisa a Recursos Humanos.', true);
+      return;
+    }
+    if (data.code === 'sesion') {
+      mostrarError('Tu sesión se cerró. <a href="login.php">Vuelve a entrar</a> para registrar tu asistencia.', false);
+      return;
+    }
+    if (data.type === 'success') {
+      elReview.hidden = true; elResult.hidden = false;
+      elResult.innerHTML = '<div class="success-icon">✅</div><div class="success-title"></div>';
+      elResult.querySelector('.success-title').textContent = data.msg;
+      setTimeout(() => location.reload(), 1800);
+      return;
+    }
+    const msg = document.createElement('span');
+    msg.textContent = data.msg || 'Ocurrió un error, intenta de nuevo.';
+    mostrarError(msg.outerHTML, res.status >= 500);
+  }
+  btnSubmit.addEventListener('click', enviar);
 })();
 </script>
 </body>

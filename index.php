@@ -2,7 +2,9 @@
 require_once __DIR__ . '/db/config.php';
 require_once __DIR__ . '/db/app_config.php';
 require_once __DIR__ . '/db/csrf.php';
+require_once __DIR__ . '/db/form_guard.php';
 $csrfToken   = generateCsrfToken();
+formGuardMarcar();
 $cfgEmpresa  = appConfig('empresa_nombre',    'Sharclean');
 $cfgGiro     = appConfig('empresa_giro',      'Limpieza y Mantenimiento Profesional');
 $cfgEmailInfo= appConfig('empresa_email_info','informacion@sharclean.com.mx');
@@ -444,6 +446,7 @@ $cfgTelefono = appConfig('empresa_telefono',  '+52 55-8945-4415');
     <div class="quote__form reveal">
       <form id="quoteForm" novalidate>
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+        <?= formGuardCampo('quote') ?>
         <div class="form-grid">
 
           <div class="form-group">
@@ -714,6 +717,7 @@ $cfgTelefono = appConfig('empresa_telefono',  '+52 55-8945-4415');
         <h3 class="section-title" style="font-size:1.6rem;margin-bottom:1.5rem;">Envíenos un mensaje</h3>
         <form id="contactForm" novalidate>
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+          <?= formGuardCampo('contact') ?>
           <div class="form-grid" style="grid-template-columns:1fr;">
 
             <div class="form-group">

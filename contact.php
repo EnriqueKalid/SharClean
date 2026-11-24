@@ -19,12 +19,20 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 require_once __DIR__ . '/db/config.php';
 require_once __DIR__ . '/db/csrf.php';
 require_once __DIR__ . '/db/ratelimit.php';
+require_once __DIR__ . '/db/form_guard.php';
 
 checkRateLimit('contact', 60);
 
 if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
     http_response_code(403);
     echo json_encode(['type' => 'error', 'msg' => 'Token de seguridad inválido. Recargue la página e intente de nuevo.']);
+    exit;
+}
+
+/* Bots (campo trampa lleno o envío instantáneo): se responde "éxito" sin guardar ni enviar nada */
+if (formGuardEsBot()) {
+    error_log('[Sharclean contact] Envío descartado por filtro anti-bots, IP ' . ($_SERVER['REMOTE_ADDR'] ?? '?'));
+    echo json_encode(['type' => 'success', 'msg' => '¡Gracias! Recibimos su información.']);
     exit;
 }
 
@@ -43,8 +51,12 @@ if (empty($message)) $errors[] = 'El mensaje es requerido.';
 if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
     $errors[] = 'El formato del correo no es válido.';
 }
+if (!empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL) && !correoDominioRecibe($email)) {
+    $errors[] = 'El dominio de su correo (' . substr(strrchr($email, '@'), 1) . ') no recibe correos. Revise que esté bien escrito.';
+}
 
 if (!empty($errors)) {
+    unset($_SESSION['rl_contact']);   // corregir un error no debe obligar a esperar el minuto
     echo json_encode(['type' => 'error', 'msg' => implode(' ', $errors)]);
     exit;
 }
