@@ -165,7 +165,7 @@ video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14
   const ACCION       = <?= json_encode($estado === 'con_entrada' ? 'salida' : 'entrada') ?>;
   const CSRF_TOKEN   = <?= json_encode($token) ?>;
   const TIENE_REF    = <?= json_encode($tieneFotoRef) ?>;
-  const MATCH_DIST   = 0.6;     // distancia máxima entre rostros para darlo por verificado
+  const MATCH_DIST   = 0.55;    // distancia máxima entre rostros para darlo por verificado (= rostro ≥ 45%); igual que FACE_MIN_SCORE del servidor
   const MAX_RETRIES  = 3;
   const MAX_PX       = 720;     // lado mayor de la selfie que se envía (~80 KB)
   const MODEL_WAIT   = 8000;    // ms máximos esperando el reconocimiento facial al capturar
@@ -185,19 +185,24 @@ video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14
 
   const detOpts = () => new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 });
 
-  /* ── Reconocimiento facial: se carga en segundo plano; al capturar se espera (máx. 8 s) ── */
+  /* ── Reconocimiento facial: primero el detector (190 KB, para la guía del óvalo), luego la comparación ── */
+  const WEIGHTS = 'assets/face-api/weights';
+  const detectorPromise = window.faceapi
+    ? faceapi.nets.tinyFaceDetector.loadFromUri(WEIGHTS).then(() => true)
+        .catch(e => { console.error('[check-in] No cargó el detector de rostro:', e); return false; })
+    : Promise.resolve(false);
+
   const facePromise = (TIENE_REF && window.faceapi)
-    ? Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri('assets/face-api/weights'),
-        faceapi.nets.faceLandmark68Net.loadFromUri('assets/face-api/weights'),
-        faceapi.nets.faceRecognitionNet.loadFromUri('assets/face-api/weights'),
+    ? detectorPromise.then(ok => ok && Promise.all([
+        faceapi.nets.faceLandmark68Net.loadFromUri(WEIGHTS),
+        faceapi.nets.faceRecognitionNet.loadFromUri(WEIGHTS),
         refPhoto.complete && refPhoto.naturalWidth ? Promise.resolve()
           : new Promise((ok, fail) => { refPhoto.addEventListener('load', ok, { once: true }); refPhoto.addEventListener('error', fail, { once: true }); }),
       ]).then(async () => {
         const det = await faceapi.detectSingleFace(refPhoto, detOpts()).withFaceLandmarks().withFaceDescriptor();
         refDescriptor = det ? det.descriptor : null;
         return refDescriptor ? true : 'sinref';      // 'sinref' = su foto de registro no tiene un rostro reconocible
-      }).catch(() => false)
+      })).catch(e => { console.error('[check-in] No cargó la verificación facial:', e); return false; })
     : Promise.resolve(false);
 
   const conTiempo = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(false), ms))]);
@@ -245,24 +250,39 @@ video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14
     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
   }
 
-  /* Guía en vivo: el óvalo se pone verde cuando se ve un rostro (solo orienta; no bloquea la captura) */
-  function startLiveGuide() {
+  /* Guía en vivo: "Capturar" solo se activa con un rostro dentro del óvalo (óvalo verde).
+     Si el detector no carga en 10 s, se avisa y se permite capturar (la verificación decide después). */
+  async function startLiveGuide() {
     camOval.classList.remove('ok');
+    btnCapture.disabled = true;
+    camHint.textContent = 'Preparando la cámara…';
+    const listo = await conTiempo(detectorPromise, 10000);
+    if (!stream) return;                                   // la cámara ya se cerró
+    if (!listo) {
+      btnCapture.disabled = false;
+      camHint.textContent = 'Verificación facial no disponible: toma tu selfie de frente y con buena luz';
+      return;
+    }
     camHint.textContent = 'Acomoda tu rostro dentro del óvalo';
-    if (!TIENE_REF || !window.faceapi) return;
     let ocupado = false;
     liveTimer = setInterval(async () => {
-      if (ocupado || !faceapi.nets.tinyFaceDetector.isLoaded || video.readyState < 2) return;
+      if (ocupado || video.readyState < 2) return;
       ocupado = true;
       try {
         const d = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 }));
         const ok = !!d && d.box.width >= video.videoWidth * 0.2;
         camOval.classList.toggle('ok', ok);
+        btnCapture.disabled = !ok;
         camHint.textContent = ok ? '¡Bien! Toca Capturar selfie'
           : (d ? 'Acércate un poco más' : 'Acomoda tu rostro dentro del óvalo, con buena luz');
-      } catch (e) { /* la guía es opcional */ }
+      } catch (e) {
+        console.error('[check-in] Falló la detección en vivo:', e);
+        clearInterval(liveTimer); liveTimer = null;
+        btnCapture.disabled = false;
+        camHint.textContent = 'Toma tu selfie de frente y con buena luz';
+      }
       ocupado = false;
-    }, 500);
+    }, 400);
   }
 
   /* ── Paso 2: capturar selfie (reducida a 720 px) ── */
@@ -289,20 +309,24 @@ video,#preview{width:100%;border-radius:12px;background:#0f172a;margin-bottom:14
       } else {
         try {
           const det = await faceapi.detectSingleFace(canvas, detOpts()).withFaceLandmarks().withFaceDescriptor();
+          /* Con verificación disponible, SOLO se puede enviar si el rostro coincide (evita que otra persona marque) */
           if (!det) {
-            faceStatus.innerHTML = '<div class="warn">No alcanzamos a ver tu rostro. Acércate, mira de frente a la cámara y busca un lugar con más luz. Puedes repetir la foto o enviarla así.</div>';
-          } else {
-            const dist = faceapi.euclideanDistance(refDescriptor, det.descriptor);
-            lastFaceScore = Math.round(Math.max(0, 1 - dist) * 100);
-            if (dist <= MATCH_DIST) {
-              faceStatus.innerHTML = '<div class="ok">✅ ¡Listo, eres tú!</div>';
-            } else if (retries < MAX_RETRIES) {
-              retries++;
-              faceStatus.innerHTML = `<div class="warn">La foto no se parece lo suficiente a tu foto de registro. Repítela de frente, sin lentes oscuros ni gorra (intento ${retries} de ${MAX_RETRIES}).</div>`;
-            } else {
-              faceStatus.innerHTML = '<div class="warn">Puedes enviar tu registro así; Recursos Humanos lo confirmará.</div>';
-            }
+            faceStatus.innerHTML = '<div class="warn">No alcanzamos a ver tu rostro. Acércate, mira de frente a la cámara y busca un lugar con más luz, y repite la foto.</div>';
+            return;                                    // botón Confirmar queda deshabilitado
           }
+          const dist = faceapi.euclideanDistance(refDescriptor, det.descriptor);
+          lastFaceScore = Math.round(Math.max(0, 1 - dist) * 100);
+          if (dist > MATCH_DIST) {
+            retries++;
+            if (retries < MAX_RETRIES) {
+              faceStatus.innerHTML = `<div class="warn">La foto no coincide con tu foto de registro. Repítela de frente, sin lentes oscuros ni gorra (intento ${retries} de ${MAX_RETRIES}).</div>`;
+            } else {
+              faceStatus.innerHTML = '<div class="error">No pudimos confirmar que eres tú, así que no se puede registrar desde este celular. Avisa a tu supervisor o a Recursos Humanos para que registren tu asistencia.</div>';
+              btnRetry.disabled = true;
+            }
+            return;                                    // botón Confirmar queda deshabilitado
+          }
+          faceStatus.innerHTML = '<div class="ok">✅ ¡Listo, eres tú!</div>';
         } catch (e) {
           faceStatus.innerHTML = '<p class="tip">No se pudo hacer la verificación automática. Puedes enviar tu registro; Recursos Humanos lo confirmará.</p>';
         }

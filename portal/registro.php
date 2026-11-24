@@ -348,7 +348,8 @@ dialog#cam-dialog::backdrop{background:rgba(15,23,42,.7)}
 .cam-stage{position:relative;aspect-ratio:3/4;max-height:68vh;background:#000;overflow:hidden}
 .cam-stage video{width:100%;height:100%;object-fit:cover}
 .cam-stage video.mirror{transform:scaleX(-1)}
-.cam-oval{position:absolute;left:50%;top:46%;width:62%;aspect-ratio:3/4;transform:translate(-50%,-50%);border:3px dashed rgba(255,255,255,.8);border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none}
+.cam-oval{position:absolute;left:50%;top:46%;width:62%;aspect-ratio:3/4;transform:translate(-50%,-50%);border:3px dashed rgba(255,255,255,.8);border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none;transition:border-color .2s}
+.cam-oval.ok{border-style:solid;border-color:#4ade80}
 .cam-foot{padding:14px;display:flex;flex-direction:column;gap:12px}
 #cam-msg{font-size:14px;color:#cbd5e1;min-height:20px;text-align:center}
 .cam-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -562,7 +563,7 @@ dialog#cam-dialog::backdrop{background:rgba(15,23,42,.7)}
 
 <?php if ($step === 'datos'): ?>
 <script src="../admin/assets/img-compress.js?v=2"></script>
-<script src="../admin/assets/foto-referencia.js?v=2"></script>
+<script src="../admin/assets/foto-referencia.js?v=3"></script>
 <script>
 /* La selfie es obligatoria y no se puede marcar "required" (el campo está oculto) */
 document.getElementById('reg-form').addEventListener('submit', function (e) {

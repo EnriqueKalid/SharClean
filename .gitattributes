@@ -1,0 +1,3 @@
+# Modelos del reconocimiento facial (face-api.js): archivos binarios sin extensión.
+# Nunca convertir saltos de línea: un solo byte de diferencia y el modelo no carga.
+portal/assets/face-api/weights/*-shard*  binary

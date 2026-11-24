@@ -700,7 +700,8 @@ dialog#cam-dialog::backdrop{background:rgba(15,23,42,.6)}
 .cam-stage{position:relative;aspect-ratio:3/4;max-height:70vh;background:#000;overflow:hidden}
 .cam-stage video{width:100%;height:100%;object-fit:cover}
 .cam-stage video.mirror{transform:scaleX(-1)}
-.cam-oval{position:absolute;left:50%;top:46%;width:58%;aspect-ratio:3/4;transform:translate(-50%,-50%);border:3px dashed rgba(255,255,255,.75);border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none}
+.cam-oval{position:absolute;left:50%;top:46%;width:58%;aspect-ratio:3/4;transform:translate(-50%,-50%);border:3px dashed rgba(255,255,255,.75);border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none;transition:border-color .2s}
+.cam-oval.ok{border-style:solid;border-color:#4ade80}
 .cam-foot{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
 #cam-msg{font-size:13px;color:#cbd5e1;min-height:18px;text-align:center}
 .cam-btns{display:flex;gap:8px;justify-content:center}
@@ -1529,7 +1530,7 @@ foreach ($porInvitar as $pi) if (empleadoCorreo($pi) !== '') $invConMail++;
 </script>
 <?php endif ?>
 <script src="assets/img-compress.js?v=2"></script>
-<?php if ($showForm): ?><script src="assets/foto-referencia.js?v=2"></script><?php endif ?>
+<?php if ($showForm): ?><script src="assets/foto-referencia.js?v=3"></script><?php endif ?>
 <script>
 /* ── Directorio: búsqueda instantánea y fila clicable ── */
 (function () {

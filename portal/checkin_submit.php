@@ -74,7 +74,14 @@ if (!file_put_contents($uploadDir . $filename, $binary)) {
 /* ── Score de verificación facial (calculado en el navegador) ── */
 $faceScoreRaw   = $_POST['face_score'] ?? '';
 $faceScore      = ($faceScoreRaw !== '' && is_numeric($faceScoreRaw)) ? max(0.0, min(100.0, (float)$faceScoreRaw)) : null;
-$revisionFlag   = ($faceScore === null || $faceScore < 50) ? 1 : 0;
+const FACE_MIN_SCORE = 45;   // igual que MATCH_DIST 0.55 en checkin.php
+if ($faceScore !== null && $faceScore < FACE_MIN_SCORE) {   // rostro que no coincide: no se registra
+    unlink($uploadDir . $filename);
+    echo json_encode(['type' => 'error', 'msg' => 'No pudimos confirmar que eres tú. Avisa a tu supervisor o a Recursos Humanos para que registren tu asistencia.']);
+    exit;
+}
+// Sin verificación (celular sin soporte o foto de registro inservible): se acepta, pero queda para revisión
+$revisionFlag   = $faceScore === null ? 1 : 0;
 
 /* Error de BD (mysqli lanza excepciones en PHP 8.1+): se responde JSON y se borra la foto huérfana */
 set_exception_handler(function (Throwable $t) use ($uploadDir, $filename) {

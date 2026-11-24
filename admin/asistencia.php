@@ -293,7 +293,8 @@ input[type=text].inp-sm{width:180px;}
 .emp-sub{font-size:11px;color:#94a3b8;margin-top:1px;}
 .num-emp{font-size:11px;font-weight:700;color:#7c3aed;background:#ede9fe;padding:1px 6px;border-radius:3px;}
 .retardo-badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;}
-.chk-audit{display:inline-flex;gap:6px;align-items:center;font-size:11px;color:#0369a1;background:#f0f9ff;padding:2px 8px;border-radius:5px;border:1px solid #bae6fd;}
+.chk-audit{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:11px;color:#0369a1;background:#f0f9ff;padding:4px 8px;border-radius:5px;border:1px solid #bae6fd;max-width:220px;}
+.num-cell{font-size:13px;color:#475569;white-space:nowrap;}
 .chk-audit a{color:#0284C7;text-decoration:underline;}
 /* Resumen grid */
 .res-cell{display:block;text-align:center;font-size:10px;font-weight:700;padding:3px 2px;border-radius:3px;min-width:22px;}
@@ -403,92 +404,89 @@ input[type=text].inp-sm{width:180px;}
           <th>Empleado</th><th>Departamento</th>
           <th>Tipo</th><th>Entrada</th><th>Salida</th>
           <th>Hrs trabajadas</th><th>Hrs extra</th><th>Retardo</th>
-          <th>Observaciones</th><th>Guardar</th>
+          <th>Check-in</th><th>Observaciones</th><th></th>
         </tr></thead>
         <tbody>
         <?php foreach ($roster as $r):
           $ya_tiene = (bool)$r['asist_id'];
+          $fid      = 'fa-' . (int)$r['id'];        // formulario de guardar de este renglón
+          $did      = 'fd-' . (int)$r['id'];        // formulario de eliminar (separado: no se pueden anidar)
         ?>
           <tr style="<?= !$ya_tiene ? 'background:#fffbeb;' : '' ?>">
             <td>
               <div class="emp-name"><?= h($r['nombre_completo']) ?></div>
               <span class="num-emp"><?= h($r['numero_empleado']) ?></span>
-            </td>
-            <td><span style="font-size:12px;color:#64748b;"><?= h($r['dept_nombre'] ?? '—') ?></span></td>
-            <td colspan="8">
-              <form method="post" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              <form method="post" id="<?= $fid ?>">
                 <input type="hidden" name="csrf_token"   value="<?= h($csrf) ?>">
                 <input type="hidden" name="action"       value="save_asistencia">
                 <input type="hidden" name="empleado_id"  value="<?= (int)$r['id'] ?>">
                 <input type="hidden" name="fecha"        value="<?= h($fecha) ?>">
                 <input type="hidden" name="back_view"    value="dia">
-
-                <select name="tipo" class="inp-sm tipo-sel" onchange="toggleHoras(this)">
-                  <?php foreach ($TIPOS_ASIST as $tv => $tl): ?>
-                    <option value="<?= $tv ?>" <?= ($r['tipo'] ?? 'normal') === $tv ? 'selected' : '' ?>><?= $tl ?></option>
-                  <?php endforeach; ?>
-                </select>
-
-                <span class="hora-fields">
-                  <input type="time" name="hora_entrada" class="inp-sm"
-                         value="<?= h(substr($r['hora_entrada'] ?? $r['hora_entrada_esperada'] ?? '08:00:00', 0, 5)) ?>">
-                  <span style="color:#94a3b8;">→</span>
-                  <input type="time" name="hora_salida"  class="inp-sm"
-                         value="<?= h(substr($r['hora_salida'] ?? '', 0, 5)) ?>">
-                </span>
-
-                <?php if ($ya_tiene): ?>
-                  <span style="font-size:12px;color:#475569;">
-                    <?= $r['horas_trabajadas'] ? number_format((float)$r['horas_trabajadas'],1).'h' : '' ?>
-                    <?php if ((float)($r['horas_extra'] ?? 0) > 0): ?>
-                      <span style="color:#7c3aed;font-weight:700;">+<?= number_format((float)$r['horas_extra'],1) ?>h extra</span>
-                    <?php endif; ?>
-                    <?php if ($r['retardo']): ?>
-                      <span class="retardo-badge">⏰ <?= $r['minutos_retardo'] ?>min retardo</span>
-                    <?php endif; ?>
-                  </span>
-                <?php endif; ?>
-
-                <?php if (($r['capturado_por'] ?? '') === 'Empleado'): ?>
-                  <span class="chk-audit" title="Marcado por el propio empleado desde el portal de check-in">
-                    📱 Autoservicio
-                    <?php if ($r['checkin_foto']): ?>
-                      <a href="asistencia_foto.php?a=<?= (int)$r['asist_id'] ?>&tipo=checkin" target="_blank" rel="noopener">📷 entrada</a>
-                    <?php endif; ?>
-                    <?php if ($r['checkout_foto']): ?>
-                      <a href="asistencia_foto.php?a=<?= (int)$r['asist_id'] ?>&tipo=checkout" target="_blank" rel="noopener">📷 salida</a>
-                    <?php endif; ?>
-                    <?php if ($r['checkin_lat'] !== null && $r['checkin_lng'] !== null): ?>
-                      <a href="https://www.google.com/maps?q=<?= h((string)$r['checkin_lat']) ?>,<?= h((string)$r['checkin_lng']) ?>" target="_blank" rel="noopener">📍 mapa</a>
-                    <?php endif; ?>
-                    <?php if ($r['checkin_face_score'] !== null): ?>
-                      <span>· rostro <?= number_format((float)$r['checkin_face_score'], 0) ?>%</span>
-                    <?php endif; ?>
-                    <?php if ($r['revision_manual']): ?>
-                      <span class="retardo-badge" style="background:#fee2e2;color:#991b1b;">⚠ revisar</span>
-                    <?php endif; ?>
-                  </span>
-                <?php endif; ?>
-
-                <input type="text" name="observaciones" class="inp-sm"
-                       value="<?= h($r['observaciones'] ?? '') ?>"
-                       placeholder="Observaciones…" style="width:150px;">
-
-                <button type="submit" class="btn btn-primary">💾</button>
-
-                <?php if ($ya_tiene): ?>
-                  <?php /* Botón eliminar registro */ ?>
-                  <form method="post" style="display:inline;">
-                    <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
-                    <input type="hidden" name="action"     value="del_asistencia">
-                    <input type="hidden" name="id"         value="<?= (int)$r['asist_id'] ?>">
-                    <input type="hidden" name="fecha"      value="<?= h($fecha) ?>">
-                    <input type="hidden" name="back_view"  value="dia">
-                    <button type="submit" class="btn btn-danger"
-                            onclick="return confirm('¿Eliminar este registro de asistencia?')">🗑</button>
-                  </form>
-                <?php endif; ?>
               </form>
+              <?php if ($ya_tiene): ?>
+              <form method="post" id="<?= $did ?>" onsubmit="return confirm('¿Eliminar este registro de asistencia?')">
+                <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+                <input type="hidden" name="action"     value="del_asistencia">
+                <input type="hidden" name="id"         value="<?= (int)$r['asist_id'] ?>">
+                <input type="hidden" name="fecha"      value="<?= h($fecha) ?>">
+                <input type="hidden" name="back_view"  value="dia">
+              </form>
+              <?php endif; ?>
+            </td>
+            <td><span style="font-size:12px;color:#64748b;"><?= h($r['dept_nombre'] ?? '—') ?></span></td>
+            <td>
+              <select name="tipo" form="<?= $fid ?>" class="inp-sm tipo-sel" aria-label="Tipo">
+                <?php foreach ($TIPOS_ASIST as $tv => $tl): ?>
+                  <option value="<?= $tv ?>" <?= ($r['tipo'] ?? 'normal') === $tv ? 'selected' : '' ?>><?= $tl ?></option>
+                <?php endforeach; ?>
+              </select>
+            </td>
+            <td><input type="time" name="hora_entrada" form="<?= $fid ?>" class="inp-sm hora-field" aria-label="Entrada"
+                       value="<?= h(substr($r['hora_entrada'] ?? $r['hora_entrada_esperada'] ?? '08:00:00', 0, 5)) ?>"></td>
+            <td><input type="time" name="hora_salida" form="<?= $fid ?>" class="inp-sm hora-field" aria-label="Salida"
+                       value="<?= h(substr($r['hora_salida'] ?? '', 0, 5)) ?>"></td>
+            <td class="num-cell"><?= $ya_tiene && $r['horas_trabajadas'] !== null ? number_format((float)$r['horas_trabajadas'], 1) . 'h' : '—' ?></td>
+            <td class="num-cell">
+              <?php if ((float)($r['horas_extra'] ?? 0) > 0): ?>
+                <span style="color:#7c3aed;font-weight:700;">+<?= number_format((float)$r['horas_extra'], 1) ?>h</span>
+              <?php else: ?>—<?php endif; ?>
+            </td>
+            <td>
+              <?php if ($ya_tiene && $r['retardo']): ?>
+                <span class="retardo-badge">⏰ <?= (int)$r['minutos_retardo'] ?> min</span>
+              <?php else: ?><span style="color:#cbd5e1;">—</span><?php endif; ?>
+            </td>
+            <td>
+              <?php if (($r['capturado_por'] ?? '') === 'Empleado'): ?>
+                <div class="chk-audit" title="Marcado por el propio empleado desde el portal de check-in">
+                  <span>📱 Autoservicio</span>
+                  <?php if ($r['checkin_foto']): ?>
+                    <a href="asistencia_foto.php?a=<?= (int)$r['asist_id'] ?>&tipo=checkin" target="_blank" rel="noopener">📷 entrada</a>
+                  <?php endif; ?>
+                  <?php if ($r['checkout_foto']): ?>
+                    <a href="asistencia_foto.php?a=<?= (int)$r['asist_id'] ?>&tipo=checkout" target="_blank" rel="noopener">📷 salida</a>
+                  <?php endif; ?>
+                  <?php if ($r['checkin_lat'] !== null && $r['checkin_lng'] !== null): ?>
+                    <a href="https://www.google.com/maps?q=<?= h((string)$r['checkin_lat']) ?>,<?= h((string)$r['checkin_lng']) ?>" target="_blank" rel="noopener">📍 mapa</a>
+                  <?php endif; ?>
+                  <?php if ($r['checkin_face_score'] !== null): ?>
+                    <span>rostro <?= number_format((float)$r['checkin_face_score'], 0) ?>%</span>
+                  <?php endif; ?>
+                  <?php if ($r['revision_manual']): ?>
+                    <span class="retardo-badge" style="background:#fee2e2;color:#991b1b;">⚠ revisar</span>
+                  <?php endif; ?>
+                </div>
+              <?php else: ?><span style="color:#cbd5e1;">—</span><?php endif; ?>
+            </td>
+            <td>
+              <input type="text" name="observaciones" form="<?= $fid ?>" class="inp-sm" aria-label="Observaciones"
+                     value="<?= h($r['observaciones'] ?? '') ?>" placeholder="Observaciones…">
+            </td>
+            <td style="white-space:nowrap;">
+              <button type="submit" form="<?= $fid ?>" class="btn btn-primary" title="Guardar">💾</button>
+              <?php if ($ya_tiene): ?>
+                <button type="submit" form="<?= $did ?>" class="btn btn-danger" title="Eliminar registro">🗑</button>
+              <?php endif; ?>
             </td>
           </tr>
         <?php endforeach; ?>
@@ -716,10 +714,11 @@ input[type=text].inp-sm{width:180px;}
 /* Ocultar campos de hora si el tipo no los necesita */
 const tiposConHora = ['normal','permiso_goce','permiso_sin_goce'];
 function toggleHoras(sel) {
-  const row     = sel.closest('form');
-  const campos  = row.querySelector('.hora-fields');
-  if (!campos) return;
-  campos.style.visibility = tiposConHora.includes(sel.value) ? 'visible' : 'hidden';
+  const row = sel.closest('tr');
+  if (!row) return;
+  row.querySelectorAll('.hora-field').forEach(function (c) {
+    c.style.visibility = tiposConHora.includes(sel.value) ? 'visible' : 'hidden';
+  });
 }
 document.querySelectorAll('.tipo-sel').forEach(function(sel) {
   toggleHoras(sel);
