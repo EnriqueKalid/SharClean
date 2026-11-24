@@ -6,6 +6,7 @@ requirePermiso('empleados');
 require_once __DIR__ . '/../db/csrf.php';
 require_once __DIR__ . '/../db/expediente.php';   // incluye db/foto_upload.php
 require_once __DIR__ . '/../db/registro.php';
+require_once __DIR__ . '/../db/mailer.php';
 
 /* ── Helpers ──────────────────────────────────────────────── */
 function h($s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
@@ -313,7 +314,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $db->query("UPDATE empleados SET registro_estado='aprobado', registro_revisado_por=$me
                     WHERE id=$id AND registro_estado='pendiente'");
         $db->affected_rows === 1
-            ? empFlash('ok', 'Registro aprobado: el empleado ya puede checar con su usuario y contraseña.')
+            ? empFlash('ok', 'Registro aprobado: el empleado ya puede entrar al portal y checar.')
             : empFlash('err', 'Este registro ya no estaba pendiente.');
         $redirect = "empleados.php?edit=$id";
     } elseif ($act === 'reg_rechazar' && $id > 0) {
@@ -323,7 +324,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $row = $fr ? $fr->fetch_assoc() : null;
         if ($row) {
             $db->query("UPDATE empleados SET registro_estado='rechazado', registro_revisado_por=$me,
-                          portal_username=NULL, portal_password_hash=NULL, foto_referencia=NULL
+                          portal_username=NULL, portal_password_hash=NULL, portal_pin_hash=NULL, foto_referencia=NULL
                         WHERE id=$id AND registro_estado='pendiente'");
             $f = __DIR__ . '/../uploads/empleados/' . basename((string)$row['foto_referencia']);
             if ($row['foto_referencia'] && is_file($f)) unlink($f);
@@ -344,9 +345,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             empFlash('ok', 'Liga de registro desactivada: ya nadie puede usarla.');
         } elseif ($op === 'rotar') {
             registroNuevaClave();
-            empFlash('ok', 'Se generó una liga nueva. La anterior ya no funciona.');
+            empFlash('ok', 'Se generó una liga nueva. La anterior (y las invitaciones ya enviadas) ya no funcionan.');
         }
-        $redirect = 'empleados.php?liga=1';
+        $redirect = ($_POST['volver'] ?? '') === 'invitar' ? 'empleados.php?invitar=1' : 'empleados.php?liga=1';
+    } elseif ($act === 'inv_correo') {
+        /* ── Invitación por correo a los empleados seleccionados (aún sin acceso al portal) ── */
+        $ids = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['ids'] ?? [])))));
+        if (!registroActivo()) {
+            empFlash('err', 'Activa la liga de registro antes de enviar invitaciones.');
+        } elseif (!$ids) {
+            empFlash('err', 'Selecciona al menos un empleado.');
+        } else {
+            @set_time_limit(300);
+            $clave   = appConfig('registro_clave');
+            $empresa = appConfig('empresa_nombre', 'la empresa');
+            $track   = invitacionDisponible($db);
+            $lista   = fetchAll($db->query('SELECT e.id, e.nombre, e.numero_empleado, e.email, e.email_corporativo
+                                            FROM empleados e WHERE e.id IN (' . implode(',', $ids) . ') AND ' . REGISTRO_ELEGIBLE_SQL . '
+                                            LIMIT 300'));
+            $ok = $fail = $sinCorreo = 0;
+            foreach ($lista as $e) {
+                $to = empleadoCorreo($e);
+                if ($to === '') { $sinCorreo++; continue; }
+                $html = invitacionCorreoHtml($e, registroUrlPersonal($clave, (string)$e['numero_empleado']), $empresa);
+                if (sendMail($to, "Activa tu cuenta del portal de empleados – $empresa", $html)) {
+                    $ok++;
+                    if ($track) invitacionMarcar($db, (int)$e['id'], 'correo');
+                } else {
+                    $fail++;
+                }
+            }
+            if ($ok)        empFlash('ok',  $ok === 1 ? 'Se envió 1 invitación por correo.' : "Se enviaron $ok invitaciones por correo.");
+            if ($fail)      empFlash('err', "No se pudo enviar el correo a $fail empleado(s). Revisa la configuración de correo.");
+            if ($sinCorreo) empFlash('err', "$sinCorreo empleado(s) no tienen correo válido: invítalos por WhatsApp.");
+            $omitidos = count($ids) - count($lista);
+            if ($omitidos > 0) empFlash('err', "$omitidos empleado(s) se omitieron porque ya tienen acceso o un registro en revisión.");
+        }
+        $redirect = 'empleados.php?invitar=1';
+    } elseif ($act === 'inv_wa' && $id > 0) {
+        /* ── El admin abrió el WhatsApp de la invitación: solo se registra la fecha (AJAX) ── */
+        if (invitacionDisponible($db)) invitacionMarcar($db, $id, 'whatsapp');
+        $db->close();
+        header('Content-Type: application/json');
+        echo json_encode(['ok' => true, 'fecha' => date('d/m/Y H:i')]);
+        exit;
     } elseif ($act === 'toggle_baja' && $id > 0) {
         $row = $db->query("SELECT estatus FROM empleados WHERE id=$id LIMIT 1")->fetch_assoc();
         if ($row) {
@@ -412,6 +454,17 @@ $regOk     = registroDisponible($db);
 $regPend   = $regOk ? registroPendientes($db) : 0;
 $regActiva = $regOk && registroActivo();
 $regUrl    = $regOk && strlen(appConfig('registro_clave')) === 32 ? registroUrl(appConfig('registro_clave')) : '';
+
+/* Invitaciones: empleados que aún no activan su cuenta del portal */
+$invTrack = $regOk && invitacionDisponible($db);
+$porInvitar = $regOk && !isset($_GET['form']) && !isset($_GET['edit']) && !isset($_GET['from_aplicacion'])
+    ? fetchAll($db->query('SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, e.numero_empleado,
+                                  e.telefono, e.email, e.email_corporativo, e.registro_estado'
+                          . ($invTrack ? ', e.invitacion_fecha, e.invitacion_canal' : '') . '
+                           FROM empleados e WHERE ' . REGISTRO_ELEGIBLE_SQL . '
+                           ORDER BY ' . ($invTrack ? 'e.invitacion_fecha IS NOT NULL, ' : '') . 'e.nombre, e.apellido_paterno
+                           LIMIT 500'))
+    : [];
 $avance = $expOk ? expedienteAvance($db) : ['total' => 0, 'por_empleado' => []];
 
 /* Empleado a editar */
@@ -614,6 +667,25 @@ dialog#liga-dialog::backdrop{background:rgba(15,23,42,.5)}
 .liga-estado.on i{background:#22c55e}
 .liga-acts{display:flex;gap:8px;flex-wrap:wrap}
 .liga-acts form{display:inline}
+/* Invitaciones de autorregistro */
+.inv-cnt{display:inline-block;min-width:20px;padding:1px 6px;border-radius:99px;background:var(--brand,#0284c7);color:#fff;font-size:11px;font-weight:700;text-align:center}
+dialog#inv-dialog{border:none;border-radius:18px;padding:0;width:min(860px,96vw);max-height:90vh;box-shadow:0 24px 64px rgba(15,23,42,.3);margin:auto}
+dialog#inv-dialog::backdrop{background:rgba(15,23,42,.5)}
+#inv-dialog form.inv-form{display:flex;flex-direction:column;max-height:calc(90vh - 60px)}
+.inv-top{padding:16px 22px;display:flex;flex-direction:column;gap:12px;font-size:13px;color:#475569;line-height:1.55;border-bottom:1px solid #f1f5f9}
+.inv-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.inv-tools input[type=search]{flex:1;min-width:180px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font:inherit}
+.inv-list{overflow:auto;flex:1}
+.inv-list table{width:100%}
+.inv-list td,.inv-list th{padding:10px 14px;font-size:13px;vertical-align:middle}
+.inv-list th{position:sticky;top:0;background:#f8fafc;z-index:1}
+.inv-list .muted{color:#94a3b8;font-size:12px}
+.inv-wa{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:#25d366;color:#fff;font-weight:700;font-size:12px;text-decoration:none;white-space:nowrap}
+.inv-wa:hover{filter:brightness(.93)}
+.inv-wa.sent{background:#dcfce7;color:#15803d}
+.inv-foot{padding:14px 22px;border-top:1px solid #f1f5f9;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.inv-foot .spacer{flex:1}
+@media(max-width:640px){.inv-list .col-mail{display:none}}
 /* Foto de referencia */
 .ref-box{display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding:18px;border:1.5px dashed #cbd5e1;border-radius:14px;background:#f8fafc;margin-bottom:24px}
 .ref-img{width:120px;height:120px;border-radius:14px;object-fit:cover;background:#e2e8f0;display:grid;place-items:center;color:#64748b;font-size:34px;font-weight:700;flex:0 0 120px}
@@ -688,8 +760,12 @@ require __DIR__ . '/_nav.php';
     <?php endif ?>
     <div>
       <h3>Registro pendiente de aprobar</h3>
-      <p>Se registró desde la liga el <?= fdt($editEmp['registro_fecha']) ?> con el usuario
-         <strong><?= h($editEmp['portal_username']) ?></strong>. Confirma que la selfie es de esta persona:
+      <p>Se registró desde la liga el <?= fdt($editEmp['registro_fecha']) ?>
+         <?php $accesos = array_filter([
+             $editEmp['portal_username'] ? 'el usuario <strong>' . h($editEmp['portal_username']) . '</strong>' : '',
+             $editEmp['portal_pin_hash'] ? 'un <strong>PIN</strong>' : '',
+         ]); ?>
+         <?= $accesos ? 'con ' . implode(' y ', $accesos) : '' ?>. Confirma que la selfie es de esta persona:
          con ella se verificará su identidad en cada check-in. Revisa también sus datos en las pestañas.</p>
       <div class="acts">
         <form method="post">
@@ -698,7 +774,7 @@ require __DIR__ . '/_nav.php';
           <input type="hidden" name="id" value="<?= (int)$editEmp['id'] ?>">
           <button type="submit" class="btn btn-primary">✓ Aprobar y activar acceso</button>
         </form>
-        <form method="post" onsubmit="return confirm('¿Rechazar el registro? Se borran su selfie y su contraseña, y podrá registrarse de nuevo.')">
+        <form method="post" onsubmit="return confirm('¿Rechazar el registro? Se borran su selfie, su contraseña y su PIN, y podrá registrarse de nuevo.')">
           <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
           <input type="hidden" name="action" value="reg_rechazar">
           <input type="hidden" name="id" value="<?= (int)$editEmp['id'] ?>">
@@ -1169,7 +1245,12 @@ require __DIR__ . '/_nav.php';
     </form>
     <span class="spacer"></span>
     <?php if ($expOk): ?><a href="documentos_catalogo.php" class="btn btn-ghost">Catálogo de documentos</a><?php endif ?>
-    <?php if ($regOk): ?><button type="button" class="btn btn-ghost" id="liga-btn">🔗 Liga de registro</button><?php endif ?>
+    <?php if ($regOk): ?>
+      <button type="button" class="btn btn-ghost" id="inv-btn" title="Enviar por correo o WhatsApp la invitación para que registren su selfie, contraseña y/o PIN">
+        📨 Invitar a registrarse<?php if ($porInvitar): ?> <span class="inv-cnt"><?= count($porInvitar) ?></span><?php endif ?>
+      </button>
+      <button type="button" class="btn btn-ghost" id="liga-btn">🔗 Liga de registro</button>
+    <?php endif ?>
     <a href="empleados_importar.php" class="btn btn-ghost">Importar CSV</a>
     <a href="empleados.php?form=1" class="btn btn-primary">+ Nuevo empleado</a>
   </div>
@@ -1298,6 +1379,139 @@ require __DIR__ . '/_nav.php';
        Acceso al portal para quien ya está activo: <strong><?= h(appBaseUrl() . '/portal/login.php') ?></strong></p>
   </div>
 </dialog>
+
+<?php
+$invEmpresa = appConfig('empresa_nombre', 'la empresa');
+$invClave   = appConfig('registro_clave');
+$invConMail = 0;
+foreach ($porInvitar as $pi) if (empleadoCorreo($pi) !== '') $invConMail++;
+?>
+<dialog id="inv-dialog">
+  <div class="liga-head">
+    <h3>Invitar a registrarse en el portal</h3>
+    <button type="button" class="btn btn-ghost btn-sm" id="inv-cerrar" aria-label="Cerrar">✕</button>
+  </div>
+  <form method="post" class="inv-form" id="inv-form">
+    <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+    <input type="hidden" name="action" value="inv_correo">
+    <div class="inv-top">
+      <?php if (isset($_GET['invitar'])): ?>
+        <?php foreach ($flash['ok'] ?? [] as $m): ?><div class="alert alert-ok" style="margin:0">✓ <?= h($m) ?></div><?php endforeach ?>
+        <?php foreach ($flash['err'] ?? [] as $m): ?><div class="alert alert-err" style="margin:0">✗ <?= h($m) ?></div><?php endforeach ?>
+      <?php endif ?>
+      <p>Estos son los empleados que <strong>aún no tienen acceso</strong> al portal. Cada uno recibe su liga personal
+         (con su número de empleado ya escrito) para tomarse la selfie y crear su <strong>contraseña y/o PIN</strong>.
+         Al terminar quedan <strong>por aprobar</strong> aquí mismo.</p>
+      <?php if (!$regActiva): ?>
+        <div class="alert alert-err" style="margin:0">La liga de registro está desactivada: las invitaciones no funcionarán hasta que la actives.
+          <button type="submit" form="inv-activar" class="btn btn-primary btn-sm" style="margin-left:8px">Activar liga</button></div>
+      <?php elseif (!$invTrack): ?>
+        <p class="muted" style="font-size:12px;color:#94a3b8">Para llevar el registro de a quién ya invitaste ejecuta <code>db/migrate_invitaciones_v1.sql</code>.</p>
+      <?php endif ?>
+      <?php if ($porInvitar): ?>
+      <div class="inv-tools">
+        <input type="search" id="inv-search" placeholder="Buscar empleado…" aria-label="Buscar empleado">
+        <label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="inv-all"> Seleccionar todos con correo</label>
+      </div>
+      <?php endif ?>
+    </div>
+
+    <div class="inv-list">
+      <?php if (!$porInvitar): ?>
+        <div class="empty">🎉 Todos los empleados activos ya tienen acceso al portal o un registro en revisión.</div>
+      <?php else: ?>
+      <table>
+        <thead><tr><th style="width:36px"></th><th>Empleado</th><th class="col-mail">Correo</th><th>WhatsApp</th><th>Última invitación</th></tr></thead>
+        <tbody>
+        <?php foreach ($porInvitar as $pi):
+          $piNombre = trim($pi['nombre'] . ' ' . $pi['apellido_paterno'] . ' ' . ($pi['apellido_materno'] ?? ''));
+          $piMail   = empleadoCorreo($pi);
+          $piWa     = $regActiva ? whatsappUrl((string)$pi['telefono'], invitacionTextoWhatsapp($pi, registroUrlPersonal($invClave, (string)$pi['numero_empleado']), $invEmpresa)) : '';
+          $piUlt    = $invTrack && $pi['invitacion_fecha'] ? fdt($pi['invitacion_fecha']) . ' · ' . str_replace('+', ' y ', (string)$pi['invitacion_canal']) : '';
+        ?>
+          <tr data-search="<?= h(mb_strtolower($piNombre . ' ' . $pi['numero_empleado'] . ' ' . $pi['telefono'] . ' ' . $piMail)) ?>">
+            <td><input type="checkbox" name="ids[]" value="<?= (int)$pi['id'] ?>" class="inv-chk" <?= $piMail === '' || !$regActiva ? 'disabled' : '' ?> aria-label="Seleccionar <?= h($piNombre) ?>"></td>
+            <td><strong><?= h($piNombre) ?></strong><div class="muted"><?= h($pi['numero_empleado']) ?><?= $pi['registro_estado'] === 'rechazado' ? ' · registro rechazado' : '' ?></div></td>
+            <td class="col-mail"><?= $piMail !== '' ? h($piMail) : '<span class="muted">Sin correo</span>' ?></td>
+            <td>
+              <?php if ($piWa !== ''): ?>
+                <a class="inv-wa <?= $invTrack && str_contains((string)$pi['invitacion_canal'], 'whatsapp') ? 'sent' : '' ?>" href="<?= h($piWa) ?>" target="_blank" rel="noopener noreferrer" data-id="<?= (int)$pi['id'] ?>">
+                  <?= $invTrack && str_contains((string)$pi['invitacion_canal'], 'whatsapp') ? '✓ Reenviar' : 'Enviar' ?>
+                </a>
+              <?php else: ?>
+                <span class="muted"><?= $regActiva ? 'Sin teléfono válido' : '—' ?></span>
+              <?php endif ?>
+            </td>
+            <td class="muted inv-ult"><?= $piUlt !== '' ? h($piUlt) : 'Nunca' ?></td>
+          </tr>
+        <?php endforeach ?>
+        </tbody>
+      </table>
+      <?php endif ?>
+    </div>
+
+    <?php if ($porInvitar): ?>
+    <div class="inv-foot">
+      <span class="muted" style="font-size:12px;color:#94a3b8"><?= count($porInvitar) ?> sin acceso · <?= $invConMail ?> con correo.
+        WhatsApp se abre uno por uno desde tu sesión de WhatsApp Web o del celular.</span>
+      <span class="spacer"></span>
+      <button type="submit" class="btn btn-primary" id="inv-enviar" disabled>Enviar correo a seleccionados</button>
+    </div>
+    <?php endif ?>
+  </form>
+  <form method="post" id="inv-activar" hidden>
+    <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+    <input type="hidden" name="action" value="reg_liga">
+    <input type="hidden" name="op" value="activar">
+    <input type="hidden" name="volver" value="invitar">
+  </form>
+</dialog>
+<script>
+(function () {
+  const dlg = document.getElementById('inv-dialog');
+  document.getElementById('inv-btn').addEventListener('click', () => dlg.showModal());
+  document.getElementById('inv-cerrar').addEventListener('click', () => dlg.close());
+  if (new URLSearchParams(location.search).has('invitar')) dlg.showModal();
+
+  const chks = Array.from(dlg.querySelectorAll('.inv-chk:not([disabled])'));
+  const all = document.getElementById('inv-all'), btn = document.getElementById('inv-enviar');
+  function sync() {
+    const n = chks.filter(c => c.checked).length;
+    if (btn) { btn.disabled = n === 0; btn.textContent = n ? 'Enviar correo a ' + n + ' seleccionado(s)' : 'Enviar correo a seleccionados'; }
+    if (all) all.checked = n > 0 && chks.every(c => c.checked || c.closest('tr').hidden);
+  }
+  chks.forEach(c => c.addEventListener('change', sync));
+  all && all.addEventListener('change', () => { chks.forEach(c => { if (!c.closest('tr').hidden) c.checked = all.checked; }); sync(); });
+
+  const q = document.getElementById('inv-search');
+  q && q.addEventListener('input', function () {
+    const v = this.value.trim().toLowerCase();
+    dlg.querySelectorAll('tbody tr[data-search]').forEach(r => { r.hidden = v !== '' && !r.dataset.search.includes(v); });
+  });
+
+  document.getElementById('inv-form').addEventListener('submit', function (e) {
+    const n = chks.filter(c => c.checked).length;
+    if (!n || !confirm('¿Enviar la invitación por correo a ' + n + ' empleado(s)?')) { e.preventDefault(); return; }
+    btn.disabled = true; btn.textContent = 'Enviando…';
+  });
+
+  /* WhatsApp: se abre en otra pestaña y se registra la fecha de la invitación */
+  dlg.querySelectorAll('a.inv-wa').forEach(function (a) {
+    a.addEventListener('click', function () {
+      const fd = new FormData();
+      fd.append('csrf_token', <?= json_encode($csrf) ?>);
+      fd.append('action', 'inv_wa');
+      fd.append('id', a.dataset.id);
+      fetch('empleados.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(r => r.json()).then(function (d) {
+          a.classList.add('sent'); a.textContent = '✓ Reenviar';
+          const ult = a.closest('tr').querySelector('.inv-ult');
+          if (ult && d.ok) ult.textContent = d.fecha + ' · whatsapp';
+        }).catch(() => {});
+    });
+  });
+})();
+</script>
 <script>
 (function () {
   const dlg = document.getElementById('liga-dialog');

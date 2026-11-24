@@ -13,7 +13,7 @@ Single-tenant, solo uso interno.
 
 | Archivo | Rol |
 |---|---|
-| `admin/index.php` | Panel principal: Contactos, Cotizaciones, Aplicaciones, Vacantes |
+| `admin/index.php` | Panel principal: Contactos, Cotizaciones, Candidatos (`?tab=aplicaciones`), Vacantes |
 | `admin/empleados.php` | Directorio (búsqueda, avance de expediente) + ficha con pestañas: Datos personales, Laboral, Bancario, Portal y foto, Expediente |
 | `admin/asistencia.php` | Módulo de asistencia (vista día, resumen mensual, incidencias) |
 | `admin/login.php` | Login con credenciales desde `.env` |
@@ -123,6 +123,7 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 12. `db/migrate_admin_v2.sql` ✅
 13. `db/migrate_expediente_v1.sql` ⏳ pendiente (`documento_tipos` con catálogo base + `empleado_documentos`)
 14. `db/migrate_registro_v1.sql` ⏳ pendiente (`empleados.registro_*`, `intentos_acceso`, config de la liga)
+15. `db/migrate_invitaciones_v1.sql` ⏳ pendiente (opcional: fecha/canal de invitaciones de autorregistro; requiere la 14)
 
 ## Estado de módulos RRHH
 
@@ -137,6 +138,7 @@ Nombre en servidor: `sharclea_dbapp` (ojo: diferente al `.env` local que dice `s
 | Reportes | `admin/reportes.php` | ✅ Completo |
 | Configuración | `admin/configuracion.php` | ✅ Completo |
 | Usuarios y Perfiles | `admin/usuarios.php` | ✅ Completo (requiere ejecutar migrate_usuarios_v1.sql) |
+| Autorregistro + invitaciones (correo/WhatsApp, contraseña y/o PIN) | `portal/registro.php` + `admin/empleados.php` (📨 Invitar) + `db/registro.php` | ✅ Completo |
 | Check-in de empleados (portal self-service) | `portal/*` + `admin/empleados.php` (foto/credenciales) + `admin/asistencia.php` (auditoría) | ✅ Completo — autorregistro por liga (`portal/registro.php`) pendiente de `migrate_registro_v1.sql` |
 
 ## Siguiente módulo a desarrollar: Portal de vacaciones/incapacidades/permisos

@@ -403,11 +403,11 @@ require __DIR__ . '/_nav.php';
 
     <div class="dash-card">
       <div class="dash-card-head">
-        <h3>🧑‍💼 Últimas aplicaciones</h3>
+        <h3>🧑‍💼 Últimos candidatos</h3>
         <a href="index.php?tab=aplicaciones">Ver todas →</a>
       </div>
       <?php if (empty($ultimas_aplics)): ?>
-        <div class="no-data">Sin aplicaciones recientes.</div>
+        <div class="no-data">Sin candidatos recientes.</div>
       <?php else: ?>
       <table class="mini-table">
         <?php

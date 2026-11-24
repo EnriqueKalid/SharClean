@@ -33,6 +33,10 @@ $k = (string)($_GET['k'] ?? '');
 if ($k !== '' && ($_SESSION['reg']['k'] ?? '') !== $k) {
     $_SESSION['reg'] = ['k' => $k, 'step' => 'identificar', 't' => time()];
 }
+/* Liga personal de una invitación (&n=EMP-0001): solo pre-escribe el número de empleado */
+if ($k !== '' && isset($_GET['n']) && preg_match('/^[A-Za-z0-9-]{1,20}$/', (string)$_GET['n'])) {
+    $_SESSION['reg']['n'] = strtoupper((string)$_GET['n']);
+}
 $reg = $_SESSION['reg'] ?? null;
 $ligaValida = registroActivo() && $reg !== null && hash_equals($claveVigente, (string)$reg['k']);
 if ($ligaValida && time() - (int)$reg['t'] > REG_TTL) {
@@ -53,6 +57,15 @@ function regElegible(array $e): bool
         && empty($e['portal_password_hash'])
         && empty($e['portal_pin_hash'])           // con PIN ya tiene acceso: no se le bloquea por un registro pendiente
         && in_array($e['registro_estado'], [null, 'rechazado'], true);
+}
+/** PIN trivial: todos iguales, consecutivos (1234 / 4321), o parte del teléfono o del número de empleado. */
+function pinDebil(string $pin, string $numeroEmpleado, string $telefono): bool
+{
+    if (preg_match('/^(\d)\1+$/', $pin)) return true;
+    if (str_contains('01234567890', $pin) || str_contains('09876543210', $pin)) return true;
+    $tel = preg_replace('/\D/', '', $telefono);
+    $num = preg_replace('/\D/', '', $numeroEmpleado);
+    return ($tel !== '' && str_contains($tel, $pin)) || ($num !== '' && str_contains(str_pad($num, strlen($pin), '0', STR_PAD_LEFT), $pin));
 }
 function regEnviarCodigo(array $e, string $email, string $empresa): bool
 {
@@ -168,8 +181,12 @@ if ($ligaValida && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $nss   = preg_replace('/\D/', '', $p('nss'));
                 $tel   = $p('telefono');
                 $email = $p('email');
-                $user  = mb_strtolower($p('portal_username'));
-                $pass  = (string)($_POST['portal_password'] ?? '');
+                $modo  = in_array($_POST['acceso'] ?? '', ['password', 'pin', 'ambos'], true) ? $_POST['acceso'] : 'password';
+                $usaPw = $modo !== 'pin';
+                $usaPin= $modo !== 'password';
+                $user  = $usaPw ? mb_strtolower($p('portal_username')) : '';
+                $pass  = $usaPw ? (string)($_POST['portal_password'] ?? '') : '';
+                $pin   = $usaPin ? trim((string)($_POST['portal_pin'] ?? '')) : '';
 
                 $edad = $fn !== '' && ($d = DateTime::createFromFormat('Y-m-d', $fn)) ? (int)$d->diff(new DateTime())->y : -1;
                 if ($edad < 15 || $edad > 90)                                  $errors[] = 'Revisa tu fecha de nacimiento.';
@@ -181,14 +198,21 @@ if ($ligaValida && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($p('direccion') === '' || $p('colonia') === '' || $p('ciudad') === '' || $p('estado_residencia') === '')
                                                                                 $errors[] = 'Completa tu domicilio (calle, colonia, ciudad y estado).';
                 if (!preg_match('/^\d{5}$/', $p('cp')))                        $errors[] = 'El código postal debe tener 5 dígitos.';
-                if (!preg_match('/^[a-z0-9._-]{4,30}$/', $user))               $errors[] = 'El usuario debe tener de 4 a 30 caracteres: letras, números, punto o guion.';
-                if (strlen($pass) < 8)                                         $errors[] = 'La contraseña debe tener al menos 8 caracteres.';
-                elseif ($pass !== (string)($_POST['portal_password2'] ?? ''))  $errors[] = 'Las contraseñas no coinciden.';
-                elseif (mb_strtolower($pass) === $user)                        $errors[] = 'La contraseña no puede ser igual a tu usuario.';
+                if ($usaPw) {
+                    if (!preg_match('/^[a-z0-9._-]{4,30}$/', $user))               $errors[] = 'El usuario debe tener de 4 a 30 caracteres: letras, números, punto o guion.';
+                    if (strlen($pass) < 8)                                         $errors[] = 'La contraseña debe tener al menos 8 caracteres.';
+                    elseif ($pass !== (string)($_POST['portal_password2'] ?? ''))  $errors[] = 'Las contraseñas no coinciden.';
+                    elseif (mb_strtolower($pass) === $user)                        $errors[] = 'La contraseña no puede ser igual a tu usuario.';
+                }
+                if ($usaPin) {
+                    if (!preg_match('/^\d{4,6}$/', $pin))                          $errors[] = 'El PIN debe tener de 4 a 6 números.';
+                    elseif ($pin !== trim((string)($_POST['portal_pin2'] ?? '')))  $errors[] = 'Los PIN no coinciden.';
+                    elseif (pinDebil($pin, (string)$e['numero_empleado'], $tel))   $errors[] = 'Ese PIN es muy fácil de adivinar (números repetidos, seguidos o parte de tu teléfono o número de empleado). Elige otro.';
+                }
                 if (empty($_POST['acepto']))                                   $errors[] = 'Debes aceptar el aviso de privacidad.';
                 if (empty($_FILES['foto_referencia']['name']))                 $errors[] = 'Toma tu selfie de referencia.';
 
-                if (!$errors) {
+                if (!$errors && $usaPw) {
                     $u   = $db->real_escape_string($user);
                     $dup = $db->query("SELECT 1 FROM empleados WHERE portal_username='$u' AND id<>{$e['id']} LIMIT 1");
                     if ($dup && $dup->fetch_row()) $errors[] = 'Ese usuario ya está ocupado. Elige otro.';
@@ -203,8 +227,9 @@ if ($ligaValida && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$errors) {
                     $sexo = in_array($_POST['sexo'] ?? '', ['M', 'F', 'NB'], true) ? $_POST['sexo'] : null;
                     $civ  = in_array($_POST['estado_civil'] ?? '', ['soltero', 'casado', 'union_libre', 'divorciado', 'viudo'], true) ? $_POST['estado_civil'] : null;
-                    $hash = password_hash($pass, PASSWORD_DEFAULT);
-                    $id   = (int)$e['id'];
+                    $hash    = $usaPw  ? password_hash($pass, PASSWORD_DEFAULT) : null;
+                    $pinHash = $usaPin ? password_hash($pin, PASSWORD_DEFAULT)  : null;
+                    $id      = (int)$e['id'];
                     $nil  = fn($v) => $v === '' ? null : $v;
 
                     // Solo si sigue sin acceso (evita que dos personas activen la misma cuenta a la vez)
@@ -212,22 +237,23 @@ if ($ligaValida && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         "UPDATE empleados SET
                            fecha_nacimiento=?, sexo=?, estado_civil=?, curp=?, rfc=?, nss=?,
                            telefono=?, email=?, direccion=?, colonia=?, ciudad=?, estado_residencia=?, cp=?,
-                           portal_username=?, portal_password_hash=?, portal_activo=1, foto_referencia=?,
+                           portal_username=?, portal_password_hash=?, portal_pin_hash=?, portal_activo=1, foto_referencia=?,
                            registro_estado='pendiente', registro_fecha=NOW(), registro_revisado_por=NULL
                          WHERE id=? AND portal_password_hash IS NULL AND portal_pin_hash IS NULL
                            AND (registro_estado IS NULL OR registro_estado='rechazado')"
                     );
                     $vals = [$fn, $sexo, $civ, $curp, $nil($rfc), $nil($nss), $tel, $nil($email) ?? $e['email'],
                              mb_substr($p('direccion'), 0, 200), mb_substr($p('colonia'), 0, 120), mb_substr($p('ciudad'), 0, 100),
-                             mb_substr($p('estado_residencia'), 0, 60), $p('cp'), $user, $hash, $foto, $id];
-                    $s->bind_param('ssssssssssssssssi', ...$vals);
+                             mb_substr($p('estado_residencia'), 0, 60), $p('cp'), $usaPw ? $user : null, $hash, $pinHash, $foto, $id];
+                    $s->bind_param('sssssssssssssssssi', ...$vals);
 
                     if ($s->execute() && $s->affected_rows === 1) {
                         $vieja = basename((string)$e['foto_referencia']);
                         if ($vieja !== '' && $vieja !== $foto && is_file(__DIR__ . "/../uploads/empleados/$vieja")) {
                             unlink(__DIR__ . "/../uploads/empleados/$vieja");
                         }
-                        $_SESSION['reg'] = ['k' => $reg['k'], 'step' => 'listo', 't' => time(), 'nombre' => $e['nombre'], 'user' => $user];
+                        $_SESSION['reg'] = ['k' => $reg['k'], 'step' => 'listo', 't' => time(), 'nombre' => $e['nombre'],
+                                            'user' => $usaPw ? $user : '', 'pin' => $usaPin, 'numero' => $e['numero_empleado']];
                     } else {
                         unlink(__DIR__ . "/../uploads/empleados/$foto");
                         $errors[] = 'No se pudo guardar tu registro. Intenta de nuevo o avisa a Recursos Humanos.';
@@ -299,6 +325,15 @@ label small{font-weight:400;color:#94a3b8}
 .code{font-size:28px;letter-spacing:12px;text-align:center;font-weight:800}
 .check{display:flex;gap:10px;align-items:flex-start;font-size:13px;font-weight:500;color:#475569;line-height:1.5}
 .check input{width:20px;height:20px;margin-top:1px;flex:0 0 20px}
+.acceso-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.acceso-opts label{margin:0;cursor:pointer;position:relative}
+.acceso-opts input{position:absolute;opacity:0;pointer-events:none}
+.acceso-opts span{display:flex;flex-direction:column;gap:2px;height:100%;padding:12px 10px;border:1.5px solid #d1d5db;border-radius:12px;text-align:center;font-size:14px}
+.acceso-opts small{font-size:11px;font-weight:400;color:#64748b;line-height:1.3}
+.acceso-opts input:checked + span{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
+.acceso-opts input:focus-visible + span{box-shadow:0 0 0 3px var(--brand-soft)}
+[hidden]{display:none !important}
+@media(max-width:400px){.acceso-opts{grid-template-columns:1fr}}
 /* Selfie (mismo componente que la ficha del admin: admin/assets/foto-referencia.js) */
 .ref-box{display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px;border:1.5px dashed #cbd5e1;border-radius:16px;background:#f8fafc;text-align:center}
 .ref-img{width:140px;height:140px;border-radius:50%;object-fit:cover;background:#e2e8f0;display:grid;place-items:center;font-size:44px}
@@ -353,7 +388,7 @@ dialog#cam-dialog::backdrop{background:rgba(15,23,42,.7)}
       <input type="hidden" name="paso" value="identificar">
       <div class="fg">
         <label for="numero_empleado">Número de empleado</label>
-        <input class="inp" id="numero_empleado" name="numero_empleado" required placeholder="EMP-0001" autocapitalize="characters" value="<?= h($_POST['numero_empleado'] ?? '') ?>">
+        <input class="inp" id="numero_empleado" name="numero_empleado" required placeholder="EMP-0001" autocapitalize="characters" value="<?= h($_POST['numero_empleado'] ?? ($reg['n'] ?? '')) ?>">
       </div>
       <div class="fg">
         <label for="contacto">Tu teléfono o correo <small>(el que está registrado)</small></label>
@@ -460,13 +495,33 @@ dialog#cam-dialog::backdrop{background:rgba(15,23,42,.7)}
       </div>
 
       <div class="section">Tu acceso</div>
-      <div class="fg"><label for="portal_username">Usuario <small>(minúsculas, sin espacios)</small></label>
-        <input class="inp" id="portal_username" name="portal_username" required minlength="4" maxlength="30" pattern="[a-zA-Z0-9._\-]{4,30}" autocapitalize="none" autocomplete="username" value="<?= h($_POST['portal_username'] ?? '') ?>"></div>
-      <div class="row2">
-        <div class="fg"><label for="portal_password">Contraseña <small>(mín. 8)</small></label>
-          <input class="inp" type="password" id="portal_password" name="portal_password" required minlength="8" autocomplete="new-password"></div>
-        <div class="fg"><label for="portal_password2">Repite la contraseña</label>
-          <input class="inp" type="password" id="portal_password2" name="portal_password2" required minlength="8" autocomplete="new-password"></div>
+      <?php $acceso = in_array($_POST['acceso'] ?? '', ['password', 'pin', 'ambos'], true) ? $_POST['acceso'] : 'password'; ?>
+      <div class="fg">
+        <label>¿Cómo quieres entrar a checar?</label>
+        <div class="acceso-opts" role="radiogroup">
+          <label><input type="radio" name="acceso" value="password" <?= $acceso === 'password' ? 'checked' : '' ?>><span><b>Contraseña</b><small>Usuario y contraseña</small></span></label>
+          <label><input type="radio" name="acceso" value="pin" <?= $acceso === 'pin' ? 'checked' : '' ?>><span><b>PIN</b><small>N° de empleado y 4–6 números</small></span></label>
+          <label><input type="radio" name="acceso" value="ambos" <?= $acceso === 'ambos' ? 'checked' : '' ?>><span><b>Los dos</b><small>Entra con cualquiera</small></span></label>
+        </div>
+      </div>
+      <div id="acc-password">
+        <div class="fg"><label for="portal_username">Usuario <small>(minúsculas, sin espacios)</small></label>
+          <input class="inp" id="portal_username" name="portal_username" required minlength="4" maxlength="30" pattern="[a-zA-Z0-9._\-]{4,30}" autocapitalize="none" autocomplete="username" value="<?= h($_POST['portal_username'] ?? '') ?>"></div>
+        <div class="row2">
+          <div class="fg"><label for="portal_password">Contraseña <small>(mín. 8)</small></label>
+            <input class="inp" type="password" id="portal_password" name="portal_password" required minlength="8" autocomplete="new-password"></div>
+          <div class="fg"><label for="portal_password2">Repite la contraseña</label>
+            <input class="inp" type="password" id="portal_password2" name="portal_password2" required minlength="8" autocomplete="new-password"></div>
+        </div>
+      </div>
+      <div id="acc-pin">
+        <div class="row2">
+          <div class="fg"><label for="portal_pin">PIN <small>(4 a 6 números)</small></label>
+            <input class="inp" type="password" id="portal_pin" name="portal_pin" required inputmode="numeric" pattern="\d{4,6}" minlength="4" maxlength="6" autocomplete="off"></div>
+          <div class="fg"><label for="portal_pin2">Repite el PIN</label>
+            <input class="inp" type="password" id="portal_pin2" name="portal_pin2" required inputmode="numeric" pattern="\d{4,6}" minlength="4" maxlength="6" autocomplete="off"></div>
+        </div>
+        <p class="sub" style="margin:-6px 0 16px;font-size:13px">Para entrar con PIN usarás tu número de empleado <strong><?= h($emp['numero_empleado']) ?></strong>. No uses números repetidos o seguidos (1111, 1234) ni parte de tu teléfono.</p>
       </div>
 
       <label class="check fg"><input type="checkbox" name="acepto" value="1" required>
@@ -492,8 +547,13 @@ dialog#cam-dialog::backdrop{background:rgba(15,23,42,.7)}
     <div class="done">
       <div class="ico">✓</div>
       <h2>¡Listo, <?= h($reg['nombre'] ?? '') ?>!</h2>
-      <p class="sub">Recursos Humanos revisará tu registro. En cuanto lo aprueben podrás checar entrando con tu usuario
-        <strong><?= h($reg['user'] ?? '') ?></strong> y la contraseña que creaste.</p>
+      <?php
+        $formas = [];
+        if (!empty($reg['user'])) $formas[] = 'tu usuario <strong>' . h($reg['user']) . '</strong> y la contraseña que creaste';
+        if (!empty($reg['pin']))  $formas[] = 'tu número de empleado <strong>' . h($reg['numero'] ?? '') . '</strong> y tu PIN';
+      ?>
+      <p class="sub">Recursos Humanos revisará tu registro. En cuanto lo aprueben podrás checar entrando con
+        <?= implode(', o con ', $formas) ?>.</p>
       <a href="login.php" class="btn btn-primary">Ir al portal</a>
     </div>
   <?php endif ?>
@@ -519,6 +579,20 @@ document.getElementById('reg-form').addEventListener('submit', function (e) {
   document.getElementById('btn-enviar').textContent = 'Enviando…';
 });
 document.getElementById('curp').addEventListener('input', function () { this.value = this.value.toUpperCase(); });
+
+/* Acceso: contraseña, PIN o ambos (los campos ocultos no se validan ni se envían) */
+(function () {
+  const pw = document.getElementById('acc-password'), pin = document.getElementById('acc-pin');
+  function sync() {
+    const v = document.querySelector('input[name=acceso]:checked').value;
+    [[pw, v !== 'pin'], [pin, v !== 'password']].forEach(function ([box, on]) {
+      box.hidden = !on;
+      box.querySelectorAll('input').forEach(i => { i.disabled = !on; });
+    });
+  }
+  document.querySelectorAll('input[name=acceso]').forEach(r => r.addEventListener('change', sync));
+  sync();
+})();
 
 /* Autocompletar colonia/ciudad/estado desde el C.P. (catálogo local) */
 (function () {

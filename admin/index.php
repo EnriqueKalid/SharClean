@@ -319,7 +319,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
     </div>
     <div class="stat">
       <div class="stat-val"><?= $cNew ?></div>
-      <div class="stat-lbl">Aplicaciones nuevas</div>
+      <div class="stat-lbl">Candidatos nuevos</div>
       <div class="stat-sub"><?= $cTotal['aplicaciones'] ?> total</div>
     </div>
     <div class="stat">
@@ -338,7 +338,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
       Cotizaciones <?= $cPending ? "<span class='cnt'>$cPending</span>" : '' ?>
     </a>
     <a href="?tab=aplicaciones" class="tab-link <?= $tab==='aplicaciones' ? 'active' : '' ?>">
-      Aplicaciones <?= $cNew    ? "<span class='cnt'>$cNew</span>"    : '' ?>
+      Candidatos <?= $cNew    ? "<span class='cnt'>$cNew</span>"    : '' ?>
     </a>
     <a href="?tab=vacantes" class="tab-link <?= $tab==='vacantes' ? 'active' : '' ?>">
       Vacantes
@@ -528,7 +528,7 @@ select.sel-sm{padding:5px 8px;border-radius:5px;border:1px solid #e2e8f0;font-si
 
       <!-- Tabla de aplicaciones -->
       <?php if (empty($rows)): ?>
-        <div class="empty">No hay aplicaciones todavía.</div>
+        <div class="empty">No hay candidatos todavía.</div>
       <?php else: ?>
       <div class="table-wrap">
         <table>
