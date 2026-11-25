@@ -22,10 +22,21 @@ function sendMail(string $to, string $subject, string $htmlBody, string $replyTo
         "\n", $htmlBody
     )));
 
+    /* Nada que venga de Configuración o de un formulario puede inyectar encabezados */
+    $limpio      = fn(string $s): string => trim(str_replace(["\r", "\n"], '', $s));
+    $fromName    = $limpio($fromName);
+    $fromAddress = $limpio($fromAddress);
+    $replyTo     = $limpio($replyTo);
+    if (!filter_var($fromAddress, FILTER_VALIDATE_EMAIL)) $fromAddress = 'noreply@sharclean.com.mx';
+    if ($replyTo !== '' && !filter_var($replyTo, FILTER_VALIDATE_EMAIL)) $replyTo = '';
+    $dominio = substr(strrchr($fromAddress, '@'), 1);
+
     $headers  = "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: multipart/alternative; boundary=\"$boundary\"\r\n";
-    $headers .= "From: $fromName <$fromAddress>\r\n";
+    // Nombre codificado (acentos/ñ) para que Gmail no lo considere encabezado mal formado
+    $headers .= 'From: =?UTF-8?B?' . base64_encode($fromName) . "?= <$fromAddress>\r\n";
     if ($replyTo) $headers .= "Reply-To: $replyTo\r\n";
+    $headers .= 'Message-ID: <' . bin2hex(random_bytes(16)) . "@$dominio>\r\n";
     $headers .= "X-Mailer: AppMailer/1.0\r\n";
 
     $body  = "--$boundary\r\n";
@@ -38,9 +49,13 @@ function sendMail(string $to, string $subject, string $htmlBody, string $replyTo
     $body .= chunk_split(base64_encode($htmlBody)) . "\r\n";
     $body .= "--$boundary--";
 
-    $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+    $encodedSubject = '=?UTF-8?B?' . base64_encode($limpio($subject)) . '?=';
 
-    return @mail($to, $encodedSubject, $body, $headers);
+    /* -f = remitente técnico (Return-Path) con el MISMO dominio del "De:". Sin esto el hosting usa
+       usuario@servidor y Gmail no puede validar SPF/DMARC de sharclean.com.mx → rechazo o spam. */
+    $ok = @mail($limpio($to), $encodedSubject, $body, $headers, '-f' . $fromAddress);
+    if (!$ok) error_log('[Sharclean mail] mail() falló hacia ' . $limpio($to));
+    return $ok;
 }
 
 function emailLayout(string $title, string $content): string

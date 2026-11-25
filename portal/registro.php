@@ -619,5 +619,6 @@ document.getElementById('curp').addEventListener('input', function () { this.val
 })();
 </script>
 <?php endif ?>
+<script src="../admin/assets/fecha-legible.js?v=1" defer></script>
 </body>
 </html>

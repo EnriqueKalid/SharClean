@@ -330,5 +330,6 @@ select.inp{cursor:pointer;background:#fff}
 
 <?php endif ?>
 </div>
+<script src="admin/assets/fecha-legible.js?v=1" defer></script>
 </body>
 </html>

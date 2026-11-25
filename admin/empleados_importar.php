@@ -32,16 +32,46 @@ const TIPOS_CONTRATO   = ['indeterminado','determinado','por_obra','confianza','
 const PERIODOS_PAGO    = ['semanal','quincenal','mensual'];
 const ESTATUSES        = ['activo','vacaciones','incapacidad','baja_temporal','baja_definitiva'];
 
-/** Acepta fechas en formato Y-m-d, d/m/Y o n/j/Y (M/D/AAAA estilo US). Devuelve: '' si vacío, false si formato inválido, o 'Y-m-d' si válida. */
-function parseFechaCsv(string $s)
+/** Órdenes de fecha que puede tener el archivo (lo elige quien importa; nunca se adivina). */
+const ORDENES_FECHA = [
+    'dmy' => 'DD/MM/AAAA (México, ej. 25/03/1990)',
+    'mdy' => 'MM/DD/AAAA (Estados Unidos, ej. 03/25/1990)',
+];
+
+/**
+ * Convierte una fecha del CSV a 'Y-m-d' según el orden ELEGIDO ($orden = dmy | mdy).
+ * Antes se adivinaba por la forma ("05/03/1990" → 5 de marzo, pero "5/3/1990" → 3 de mayo):
+ * la misma fecha quedaba distinta según la PC que exportó el archivo.
+ *  · AAAA-MM-DD siempre se acepta (no es ambigua).
+ *  · Con / - o . y con o sin ceros: 5/3/1990, 05-03-1990, 5.3.1990.
+ *  · Número de serie de Excel (ej. 32937) cuando la celda se exportó sin formato.
+ *  · Año de 2 dígitos: se rechaza (¿1990 o 2090?).
+ * Devuelve '' si está vacía, false si es inválida o contradice el orden elegido, o 'Y-m-d'.
+ */
+function parseFechaCsv(string $s, string $orden = 'dmy')
 {
     $s = trim($s);
     if ($s === '') return '';
-    foreach (['Y-m-d', 'd/m/Y', 'n/j/Y'] as $fmt) {
-        $d = DateTime::createFromFormat('!' . $fmt, $s);
-        if ($d && $d->format($fmt) === $s) return $d->format('Y-m-d');
+    if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})$/', $s, $m)) {
+        [$y, $mes, $dia] = [(int)$m[1], (int)$m[2], (int)$m[3]];
+    } elseif (preg_match('/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/', $s, $m)) {
+        [$a, $b, $y] = [(int)$m[1], (int)$m[2], (int)$m[3]];
+        [$dia, $mes] = $orden === 'mdy' ? [$b, $a] : [$a, $b];
+    } elseif (preg_match('/^\d{5}$/', $s) && (int)$s > 0) {            // serie de Excel (días desde 1899-12-30)
+        return (new DateTime('1899-12-30'))->modify('+' . (int)$s . ' days')->format('Y-m-d');
+    } else {
+        return false;
     }
-    return false;
+    return checkdate($mes, $dia, $y) && $y >= 1900 ? sprintf('%04d-%02d-%02d', $y, $mes, $dia) : false;
+}
+
+/** "25 mar 1990": para mostrar en el resultado cómo se interpretó cada fecha. */
+function fechaLegible(?string $ymd): string
+{
+    if (!$ymd) return '—';
+    static $m = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    [$y, $mes, $d] = array_map('intval', explode('-', $ymd));
+    return "$d {$m[$mes - 1]} $y";
 }
 
 /** Busca un empleado existente que choque por CURP, RFC o número de empleado. */
@@ -105,6 +135,9 @@ $resultado = null; // ['importados'=>int,'omitidos'=>[...],'errores'=>[...]] o [
 /* ── POST: procesar archivo ───────────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'importar') {
     if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) { http_response_code(403); exit('Token inválido.'); }
+    $ordenFechas = array_key_exists($_POST['orden_fechas'] ?? '', ORDENES_FECHA) ? $_POST['orden_fechas'] : 'dmy';
+    $fmtTxt      = $ordenFechas === 'mdy' ? 'MM/DD/AAAA' : 'DD/MM/AAAA';
+    $muestras    = [];   // cómo se interpretaron las fechas, para revisarlas en el resultado
 
     if (!isset($_FILES['csv']) || $_FILES['csv']['error'] !== UPLOAD_ERR_OK) {
         $resultado = ['error' => 'No se pudo subir el archivo. Verifica que sea un CSV válido.'];
@@ -174,16 +207,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
                         continue;
                     }
 
-                    $fecha_ingreso = parseFechaCsv($fecha_ingreso_raw);
+                    $fecha_ingreso = parseFechaCsv($fecha_ingreso_raw, $ordenFechas);
                     if ($fecha_ingreso === false) {
-                        $errores[] = "Fila $numFila — $quien: fecha_ingreso con formato inválido (use AAAA-MM-DD o DD/MM/AAAA).";
+                        $errores[] = "Fila $numFila — $quien: fecha_ingreso \"$fecha_ingreso_raw\" no es una fecha válida en formato $fmtTxt (o AAAA-MM-DD). Revisa el formato elegido al importar.";
                         continue;
                     }
 
                     $ap_mat = $get($cols, $idx, 'apellido_materno') ?: null;
 
-                    $fecha_nacimiento = parseFechaCsv($get($cols, $idx, 'fecha_nacimiento'));
-                    if ($fecha_nacimiento === false) { $rowErrors[] = "fecha_nacimiento con formato inválido"; $fecha_nacimiento = null; }
+                    $fecha_nacimiento = parseFechaCsv($get($cols, $idx, 'fecha_nacimiento'), $ordenFechas);
+                    if ($fecha_nacimiento === false) { $rowErrors[] = "fecha_nacimiento no es válida en formato $fmtTxt (se dejó vacía)"; $fecha_nacimiento = null; }
                     elseif ($fecha_nacimiento === '') $fecha_nacimiento = null;
 
                     $sexo_raw = $get($cols, $idx, 'sexo');
@@ -242,8 +275,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
                         else $rowErrors[] = "tipo_contrato '$tipo_raw' inválido";
                     }
 
-                    $fecha_fin = parseFechaCsv($get($cols, $idx, 'fecha_fin_contrato'));
-                    if ($fecha_fin === false) { $rowErrors[] = "fecha_fin_contrato con formato inválido"; $fecha_fin = null; }
+                    $fecha_fin = parseFechaCsv($get($cols, $idx, 'fecha_fin_contrato'), $ordenFechas);
+                    if ($fecha_fin === false) { $rowErrors[] = "fecha_fin_contrato no es válida en formato $fmtTxt (se dejó vacía)"; $fecha_fin = null; }
                     elseif ($fecha_fin === '') $fecha_fin = null;
 
                     $sal_raw = str_replace([',', ' ', '$'], '', $get($cols, $idx, 'salario_base'));
@@ -270,8 +303,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
                         else $rowErrors[] = "estatus '$estatus_raw' inválido";
                     }
 
-                    $fecha_baja = parseFechaCsv($get($cols, $idx, 'fecha_baja'));
-                    if ($fecha_baja === false) { $rowErrors[] = "fecha_baja con formato inválido"; $fecha_baja = null; }
+                    $fecha_baja = parseFechaCsv($get($cols, $idx, 'fecha_baja'), $ordenFechas);
+                    if ($fecha_baja === false) { $rowErrors[] = "fecha_baja no es válida en formato $fmtTxt (se dejó vacía)"; $fecha_baja = null; }
                     elseif ($fecha_baja === '') $fecha_baja = null;
 
                     $motivo_baja = $get($cols, $idx, 'motivo_baja') ?: null;
@@ -321,12 +354,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
                             $updNumStmt->execute();
                         }
                         $importados++;
+                        if (count($muestras) < 10) {
+                            $muestras[] = "Fila $numFila — $quien: ingreso " . fechaLegible($fecha_ingreso)
+                                        . ($fecha_nacimiento ? ', nacimiento ' . fechaLegible($fecha_nacimiento) : '');
+                        }
                     } else {
                         $errores[] = "Fila $numFila — $quien: error al guardar (" . ($db->error ?: 'desconocido') . ").";
                     }
                 }
 
-                $resultado = ['importados' => $importados, 'omitidos' => $omitidos, 'errores' => $errores];
+                $resultado = ['importados' => $importados, 'omitidos' => $omitidos, 'errores' => $errores,
+                              'muestras' => $muestras, 'formato' => ORDENES_FECHA[$ordenFechas]];
             }
         }
         if ($handle) fclose($handle);
@@ -359,6 +397,8 @@ a{color:inherit;text-decoration:none;}
 .btn-outline:hover{background:#f0f9ff;}
 .hint{font-size:13px;color:#64748b;line-height:1.6;margin-bottom:14px;}
 .hint code{background:#f1f5f9;padding:1px 6px;border-radius:4px;font-size:12px;}
+.fmt-fecha{display:inline-flex;gap:8px;align-items:center;font-size:13px;color:#334155;margin:0 12px 0 4px;}
+.fmt-fecha select{padding:6px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font:inherit;font-size:13px;}
 .hint ul{margin:6px 0 6px 20px;}
 input[type=file]{display:block;margin:14px 0;font-size:13px;}
 .alert{padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;}
@@ -391,7 +431,8 @@ input[type=file]{display:block;margin:14px 0;font-size:13px;}
         Sube un archivo CSV con un empleado por fila. La primera fila debe contener
         los nombres de columna exactamente como en la plantilla.
         <ul>
-          <li>Columnas obligatorias: <code>nombre</code>, <code>apellido_paterno</code>, <code>fecha_ingreso</code> (formato <code>AAAA-MM-DD</code> o <code>DD/MM/AAAA</code>).</li>
+          <li>Columnas obligatorias: <code>nombre</code>, <code>apellido_paterno</code>, <code>fecha_ingreso</code>.</li>
+          <li><strong>Fechas:</strong> elige abajo cómo vienen en tu archivo. Excel las guarda según el idioma de la computadora: en una PC en inglés suelen quedar como <code>MM/DD/AAAA</code>. Si tienes duda, abre el CSV con el Bloc de notas y fíjate en una fecha con día mayor a 12.</li>
           <li><code>numero_empleado</code> es opcional — si se deja vacío, se genera automáticamente (EMP-XXXX).</li>
           <li><code>departamento_id</code> y <code>puesto_id</code> deben ser los IDs numéricos de los catálogos de Departamentos y Puestos (no el nombre).</li>
           <li>Filas con CURP, RFC o número de empleado que ya existan en el sistema se omiten y se reportan al final — no se sobrescriben registros existentes.</li>
@@ -403,6 +444,13 @@ input[type=file]{display:block;margin:14px 0;font-size:13px;}
         <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
         <input type="hidden" name="action" value="importar">
         <input type="file" name="csv" accept=".csv,text/csv" required>
+        <label class="fmt-fecha">Las fechas del archivo vienen como:
+          <select name="orden_fechas">
+            <?php foreach (ORDENES_FECHA as $k => $l): ?>
+              <option value="<?= $k ?>" <?= ($_POST['orden_fechas'] ?? 'dmy') === $k ? 'selected' : '' ?>><?= h($l) ?></option>
+            <?php endforeach ?>
+          </select>
+        </label>
         <button type="submit" class="btn-sm btn-primary">Importar archivo</button>
       </form>
     </div>
@@ -424,6 +472,14 @@ input[type=file]{display:block;margin:14px 0;font-size:13px;}
           <div><div class="num c-warn"><?= count($resultado['omitidos']) ?></div><div class="lbl">Omitidos (duplicados)</div></div>
           <div><div class="num c-err"><?= count($resultado['errores']) ?></div><div class="lbl">Con error</div></div>
         </div>
+
+        <?php if ($resultado['muestras']): ?>
+          <div class="detail-title">Revisa que las fechas se leyeron bien (formato elegido: <?= h($resultado['formato']) ?>)</div>
+          <ul class="detail-list">
+            <?php foreach ($resultado['muestras'] as $msg): ?><li><?= h($msg) ?></li><?php endforeach ?>
+          </ul>
+          <p style="font-size:13px;color:#64748b;margin:6px 0 14px">Si salen al revés (día y mes cambiados), corrige esos empleados en su ficha o bórralos e impórtalos de nuevo con el otro formato.</p>
+        <?php endif ?>
 
         <?php if ($resultado['omitidos']): ?>
           <div class="detail-title">Omitidos por duplicado</div>
